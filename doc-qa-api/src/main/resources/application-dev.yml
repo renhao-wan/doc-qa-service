@@ -46,8 +46,8 @@ searxng: # SearXNG 搜索引擎配置
 
 
 customer-service: # AI 智能客服
-  file-storage-path: E:\\java_workspace\\xiaoha-ai-robot # Markdown 问答文件存储路径
-  chunk-path: E:\\java_workspace\\xiaoha-ai-robot\\chunk # 分片文件存储路径
+  file-storage-path: E:\\java_workspace\\doc-qa # Markdown 问答文件存储路径
+  chunk-path: E:\\java_workspace\\doc-qa\\chunk # 分片文件存储路径
   model: deepseek-v3 # 模型名称
   temperature: 0.0 # 温度值
 

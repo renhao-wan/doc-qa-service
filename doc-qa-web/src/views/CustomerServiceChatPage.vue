@@ -62,7 +62,7 @@
 
         <!-- 提问输入框 -->
         <ChatInputBox v-model="chatMessage" containerClass="sticky max-w-3xl mx-auto bg-white bottom-8 left-0 w-full"
-          @sendMessage="sendMessage" placeholder="向小哈 AI 智能客服询问" :showModelDropdown="false" :showNetworkSearch="false"/>
+          @sendMessage="sendMessage" placeholder="向 Doc QA 询问" :showModelDropdown="false" :showNetworkSearch="false"/>
       </div>
 
       <!-- 抽屉：客服问答文件管理 -->
@@ -268,7 +268,7 @@ const chatMessage = ref(history.state?.firstMessage || '')
 const chatContainer = ref(null)
 
 // 聊天记录，默认给一个欢迎语
-const chatList = ref([{ role: 'assistant', content: '你好呀！我是 “犬小哈项目实战专栏” 的 AI 智能客服，基于 Spring AI 开发，欢迎向我咨询项目相关问题哈 😁', loading: false }])
+const chatList = ref([{ role: 'assistant', content: '你好呀！我是 Doc QA 智能客服，基于 Spring AI 开发，欢迎向我咨询文档相关问题 😁', loading: false }])
 
 // 对话 ID
 const chatId = ref(null)

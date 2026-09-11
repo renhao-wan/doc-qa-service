@@ -7,7 +7,7 @@ const routes = [
         name: 'Index', // 命名路由
         component: () => import('@/views/Index.vue'), // 对应组件
         meta: { // meta 信息
-            title: '小哈 AI 机器人首页' // 页面标题
+            title: 'Doc QA 首页' // 页面标题
         }
     },
     {

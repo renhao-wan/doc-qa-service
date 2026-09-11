@@ -7,7 +7,7 @@
           <div class="text-center mb-10">
             <div class="flex items-center justify-center mb-3">
               <SvgIcon name="ai-robot-logo" customCss="w-10 h-10 text-gray-700 mr-3" />
-              <h2 class="text-2xl text-gray-800">我是小哈 AI 机器人，很高兴见到你！</h2>
+              <h2 class="text-2xl text-gray-800">我是 Doc QA，很高兴见到你！</h2>
             </div>
             <p class="text-gray-500">我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧~</p>
           </div>

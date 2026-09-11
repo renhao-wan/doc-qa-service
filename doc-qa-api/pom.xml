@@ -9,15 +9,15 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
-    <groupId>com.quanxiaoha</groupId>
-    <artifactId>ai-robot</artifactId>
+    <groupId>io.github.renhaowan</groupId>
+    <artifactId>doc-qa-api</artifactId>
     <version>${revision}</version>
-    <name>xiaoha-ai-robot-springboot</name>
-    <description>小哈 AI 机器人</description>
+    <name>doc-qa-api</name>
+    <description>企业私有知识库问答服务</description>
 
     <properties>
         <!-- JDK 版本 -->
-        <java.version>21</java.version>
+        <java.version>17</java.version>
         <!-- Spring AI 版本 -->
 <!--        <spring-ai.version>1.0.0</spring-ai.version>-->
         <spring-ai.version>1.1.1</spring-ai.version>
