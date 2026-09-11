@@ -1,0 +1,30 @@
+# ---------- Java / Maven ----------
+target/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+
+# ---------- 日志 ----------
+logs/
+*.log
+
+# ---------- IDE ----------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# ---------- Node / Vite ----------
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---------- 系统 ----------
+.DS_Store
+Thumbs.db
