@@ -29,6 +29,10 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# ---------- 运行时数据 ----------
+# 知识库文件与上传分片的落盘位置（customer-service.file-storage-path / chunk-path）
+data/
+
 # ---------- 内部工作文档（不进入公开仓库）----------
 # 包含简历包装策略、面试话术、项目缺陷盘点等内容，仅本地使用
 CLAUDE.md

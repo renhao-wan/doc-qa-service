@@ -53,8 +53,11 @@ searxng: # SearXNG 搜索引擎配置
 
 
 customer-service: # AI 智能客服
-  file-storage-path: E:\\java_workspace\\doc-qa # Markdown 问答文件存储路径
-  chunk-path: E:\\java_workspace\\doc-qa\\chunk # 分片文件存储路径
+  # 存储路径用相对路径，基准是应用的工作目录（IDEA 里跑或 mvn spring-boot:run 都是 doc-qa-api/），
+  # 落在 doc-qa-api/data/ 下，已被 .gitignore 排除。换机器、换目录都无需改配置。
+  # ⚠️ 不要写绝对路径：路径不可用时目录创建会失败，表现为分片上传/合并接口报错。
+  file-storage-path: ./data/files # Markdown 问答文件存储路径
+  chunk-path: ./data/chunks # 分片文件存储路径
   model: deepseek-v3 # 模型名称
   temperature: 0.0 # 温度值
 

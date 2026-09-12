@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -243,14 +244,23 @@ public class CustomerServiceImpl implements CustomerService {
             return Response.success();
         }
 
-        // 创建分片目录（确保父目录也存在）
-        String chunkDir = chunkPath + File.separator + fileMd5;
+        // 创建分片目录（确保父目录也存在）。
+        // ⚠️ 必须转成绝对路径，不能直接把配置里的相对路径拼给 transferTo：
+        //    MultipartFile.transferTo 走的是 Servlet 容器的 Part.write()，
+        //    它把**相对路径**解析为相对于 multipart 临时目录
+        //    （%TEMP%\tomcat.8080.xxx\work\Tomcat\localhost\ROOT\），
+        //    而上面的 forceMkdir 是按 JVM 工作目录解析的。
+        //    两者规则不同，结果就是「目录建好了、文件却写不进去」，
+        //    报 FileNotFoundException 且路径看起来莫名其妙。
+        String chunkDir = Paths.get(chunkPath, fileMd5).toAbsolutePath().normalize().toString();
         File chunkDirFile = new File(chunkDir);
         try {
             FileUtils.forceMkdir(chunkDirFile);
         } catch (IOException e) {
-            log.error("## 创建分片目录失败: {}", chunkDir);
-            throw new RuntimeException(e);
+            // 把异常对象一并传给日志，否则堆栈丢失，只剩一行「创建失败」无法定位
+            // （最常见的原因是 customer-service.chunk-path 配了本机不存在的绝对路径）
+            log.error("## 创建分片目录失败: {}", chunkDir, e);
+            throw new BizException(ResponseCodeEnum.STORAGE_DIR_UNAVAILABLE);
         }
 
         // 保存分片文件到本地
@@ -259,8 +269,8 @@ public class CustomerServiceImpl implements CustomerService {
         try {
             chunk.transferTo(chunkFile);
         } catch (IOException e) {
-            log.error("## 保存分片文件失败: {}", chunkFileName);
-            throw new RuntimeException(e);
+            log.error("## 保存分片文件失败: {}", chunkFileName, e);
+            throw new BizException(ResponseCodeEnum.UPLOAD_FILE_FAILED);
         }
 
         // 保存分片记录。
@@ -341,13 +351,16 @@ public class CustomerServiceImpl implements CustomerService {
             throw new BizException(ResponseCodeEnum.CHUNK_NUM_NOT_COMPLETE);
         }
 
-        // 创建文件目录
-        File uploadDir = new File(fileStoragePath);
+        // 创建文件目录。
+        // 绝对化 + 规范化，否则下面 finalFile.getAbsolutePath() 会把配置里的 "./" 原样带进去，
+        // 存到 file_path 就成了 "D:\...\doc-qa-api\.\data\files\xxx.md" 这种夹着 .\ 的怪路径。
+        // 注意 getAbsoluteFile() 只拼上工作目录、**不解析** "." 和 ".."，必须用 normalize()。
+        File uploadDir = Paths.get(fileStoragePath).toAbsolutePath().normalize().toFile();
         try {
             FileUtils.forceMkdir(uploadDir);
         } catch (IOException e) {
-            log.error("## 创建文件合并目录失败: {}", uploadDir);
-            throw new RuntimeException(e);
+            log.error("## 创建文件合并目录失败: {}", uploadDir, e);
+            throw new BizException(ResponseCodeEnum.STORAGE_DIR_UNAVAILABLE);
         }
 
         // 合并文件的名称
@@ -356,8 +369,10 @@ public class CustomerServiceImpl implements CustomerService {
         File finalFile = new File(uploadDir, finalFileName);
 
         // 分片文件所在目录：由配置 + fileMd5 推导（记录里只存了文件名，不存绝对路径，
-        // 这样换机器或挪目录后历史记录依然有效）
-        String chunkDir = chunkPath + File.separator + fileMd5;
+        // 这样换机器或挪目录后历史记录依然有效）。
+        // ⚠️ 这里的绝对化必须与 uploadChunk 中的写法保持一致，否则一边按 JVM 工作目录建、
+        //    一边按别的基准找，合并时会找不到分片文件。
+        String chunkDir = Paths.get(chunkPath, fileMd5).toAbsolutePath().normalize().toString();
 
         // 合并分片
         try (FileOutputStream fos = new FileOutputStream(finalFile);
@@ -377,8 +392,8 @@ public class CustomerServiceImpl implements CustomerService {
                 }
             }
         } catch (Exception e) {
-            log.error("## 合并文件失败: ", e);
-            throw new RuntimeException(e);
+            log.error("## 合并文件失败: fileMd5={}", fileMd5, e);
+            throw new BizException(ResponseCodeEnum.FILE_MERGE_FAILED);
         }
 
         // 更新文件信息
@@ -392,8 +407,10 @@ public class CustomerServiceImpl implements CustomerService {
         try {
             FileUtils.forceDelete(new File(chunkDir));
         } catch (IOException e) {
-            log.error("## 删除分片文件失败: ", e);
-            throw new RuntimeException(e);
+            // 清理失败同样抛出并回滚：此时文件已合并，但状态与记录的更新一并撤销，
+            // 避免留下「分片还在、状态却已进入待向量化」的不一致中间态
+            log.error("## 删除分片文件失败: {}", chunkDir, e);
+            throw new BizException(ResponseCodeEnum.FILE_MERGE_FAILED);
         }
 
         fileChunkInfoMapper.deleteByMd5(fileMd5);

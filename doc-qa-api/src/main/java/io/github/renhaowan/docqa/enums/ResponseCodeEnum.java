@@ -28,6 +28,8 @@ public enum ResponseCodeEnum implements BaseExceptionInterface {
     MARKDOWN_FILE_CANT_DELETE("20005", "正在处理中的 Markdown 问答文件，不允许删除"),
     MERGE_CHUNK_NOT_FOUND("20006", "合并的分片文件不存在"),
     CHUNK_NUM_NOT_COMPLETE("20007", "分片数量不完整"),
+    STORAGE_DIR_UNAVAILABLE("20008", "服务器存储目录不可用，请联系管理员"),
+    FILE_MERGE_FAILED("20009", "文件合并失败"),
     ;
 
     // 异常码
