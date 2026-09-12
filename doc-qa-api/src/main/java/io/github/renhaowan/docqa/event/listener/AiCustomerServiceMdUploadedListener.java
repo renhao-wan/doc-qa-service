@@ -10,10 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.context.event.EventListener;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
@@ -41,9 +42,20 @@ public class AiCustomerServiceMdUploadedListener {
 
     /**
      * Markdown 文件向量化
-     * @param event
+     * <p>
+     * 用 {@link TransactionalEventListener} 而不是普通的 {@code @EventListener}：
+     * 事件是在 {@code CustomerServiceImpl#mergeChunk} 的事务里发布的，而 {@code @EventListener}
+     * 不感知事务边界，{@code @Async} 也只是把它丢到别的线程，事件可能在事务提交前就被处理，
+     * 此时监听器读库会读到旧数据（乃至读不到刚写入的记录）。
+     * 指定 {@code AFTER_COMMIT} 后，监听器只在事务成功提交后才被触发。
+     * <p>
+     * {@code fallbackExecution = true}：若事件在事务外发布，则退化为立即执行。
+     * 这样既不失去「提交后才处理」的语义（无事务即无未提交数据），又避免调用方一旦漏加事务，
+     * 向量化就被静默跳过、文件永远卡在 PENDING 状态。
+     *
+     * @param event 文件合并完成事件
      */
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     @Async("eventTaskExecutor") // 指定使用我们自定义的线程池
     public void vectorizing(AiCustomerServiceMdUploadedEvent event) {
         log.info("## AiCustomerServiceMdUploadedEvent: {}", event);
