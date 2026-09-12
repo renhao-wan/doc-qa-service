@@ -1,0 +1,37 @@
+# SearXNG 配置
+# 挂载到容器的 /etc/searxng/settings.yml
+# 官方文档：https://docs.searxng.org/admin/settings/
+
+# 其余配置全部继承 SearXNG 默认值，这里只覆盖必须改的项
+use_default_settings: true
+
+general:
+  instance_name: "doc-qa-searxng"
+
+server:
+  # secret_key 由环境变量 SEARXNG_SECRET 提供（见 docker-compose.yml），不落盘到本文件
+  base_url: http://localhost:8889/
+
+  # ⚠️ 关掉限流。SearXNG 默认的 limiter 会拦截高频的程序化请求，
+  # 表现为服务端日志里大量 429，Java 侧则拿到空结果。
+  # 本地开发关闭即可；若部署到公网应改回 true 并配 Redis。
+  limiter: false
+
+  image_proxy: false
+
+search:
+  safe_search: 0
+  default_lang: "auto"
+
+  # ⚠️ 关键配置：SearXNG 默认只允许 html 格式。
+  # 项目的 SearXNGServiceImpl 请求的是 format=json，不在这里开启会失败。
+  formats:
+    - html
+    - json
+
+# 关于搜索引擎：
+# 代码 SearXNGServiceImpl 里通过 engines 参数硬编码了一批引擎
+# （wolframalpha / presearch / seznam / bing / naver / 360search 等）。
+# 其中不少在国内网络下访问不通，会导致搜索结果为空。
+# 如果联调时发现搜不到东西，优先去调整那行 engines 参数，
+# 而不要在这里改配置——两边同时配会互相干扰。

@@ -41,7 +41,7 @@ okhttp: # OkHttp 客户端配置
   keep-alive-duration: 5   # 空闲连接在连接池中的存活时间（分钟）
 
 searxng: # SearXNG 搜索引擎配置
-  url: http://localhost:8888/search # SearXNG 服务的 API 端点地址
+  url: http://localhost:8889/search # SearXNG 服务的 API 端点地址（宿主机 8888 被 AnythingLLM 占用）
   count: 10 # 每次从搜索结果中，提取的最大数量
 
 

@@ -1,12 +1,12 @@
 # doc-qa-service 本地依赖编排
 #
-# 当前只包含数据库。应用本身与 SearXNG 待「Docker 化」阶段再加入本文件，
-# 届时 app 服务直接挂到 doc-qa-net 上，用服务名 postgres 访问数据库，
-# 不再需要 ports 映射。
+# 当前包含 PostgreSQL（带 pgvector）与 SearXNG（联网搜索）。
+# 应用本身待「Docker 化」阶段再加入，届时 app 服务直接挂到 doc-qa-net 上，
+# 用服务名 postgres / searxng 访问，不再需要 ports 映射。
 #
 # 启动：docker compose up -d
 # 查看：docker compose ps
-# 日志：docker compose logs -f postgres
+# 日志：docker compose logs -f <服务名>
 # 停止：docker compose down          （保留数据卷）
 # 清库：docker compose down -v       （连同数据卷一起删除，慎用）
 
@@ -36,6 +36,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    networks:
+      - doc-qa-net
+
+  searxng:
+    # 版本号取自镜像 label org.opencontainers.image.version，固定以免 latest 漂移
+    image: searxng/searxng:2026.9.11-61d660276
+    container_name: doc-qa-searxng
+    restart: unless-stopped
+    environment:
+      # 与 application-dev.yml 的 searxng.url 对应
+      - SEARXNG_BASE_URL=http://localhost:8889/
+      # 会话签名密钥。这里是为本地开发写死的固定值，部署到公网前务必替换
+      - SEARXNG_SECRET=docqa-local-dev-secret-please-change
+    ports:
+      # 宿主机 8888 被 AnythingLLM 占用，故改用 8889
+      # 将来 app 并入同一网络后改用 http://searxng:8080，不再需要端口映射
+      - "8889:8080"
+    volumes:
+      # 挂载配置目录，容器首次启动会写入 settings.yml 及缓存
+      - ./searxng:/etc/searxng:rw
     networks:
       - doc-qa-net
 
