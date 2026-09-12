@@ -30,6 +30,12 @@ public enum ResponseCodeEnum implements BaseExceptionInterface {
     CHUNK_NUM_NOT_COMPLETE("20007", "分片数量不完整"),
     STORAGE_DIR_UNAVAILABLE("20008", "服务器存储目录不可用，请联系管理员"),
     FILE_MERGE_FAILED("20009", "文件合并失败"),
+    MARKDOWN_FILE_NO_PERMISSION("20010", "无权操作该文件"),
+
+
+    // ----------- 鉴权异常状态码 -----------
+    AUTH_INVALID_CREDENTIALS("30000", "用户名或密码错误"),
+    AUTH_TOKEN_INVALID("30001", "登录状态已失效，请重新登录"),
     ;
 
     // 异常码
