@@ -108,6 +108,24 @@ public class CustomerServiceImpl implements CustomerService {
             }
         }
 
+        // 清理分片残留：删除「上传中」（UPLOADING）的文件时，磁盘上的分片文件
+        // 与 t_file_chunk_info 记录必须一并回收——该状态是放行删除的，所以这是常规路径。
+        // ⚠️ 不清理的话该 MD5 会永久卡死：重传时 checkFile 返回「需上传」，
+        //    但 uploadChunk 的幂等快速路径只认分片表、直接返回成功，主记录永远重建不出来，
+        //    于是 mergeChunk 恒报 MERGE_CHUNK_NOT_FOUND(20006)，怎么传都合并不了。
+        String fileMd5 = aiCustomerServiceFileStorageDO.getFileMd5();
+        fileChunkInfoMapper.deleteByMd5(fileMd5);
+
+        // 分片目录由 chunk-path + fileMd5 推导（与 uploadChunk / mergeChunk 的拼法保持一致）
+        File chunkDirFile = Paths.get(chunkPath, fileMd5).toAbsolutePath().normalize().toFile();
+        if (chunkDirFile.exists()) {
+            try {
+                FileUtils.forceDelete(chunkDirFile);
+            } catch (IOException e) {
+                log.error("## 分片目录删除失败：{}", chunkDirFile, e);
+            }
+        }
+
         return Response.success();
     }
 
@@ -248,7 +266,16 @@ public class CustomerServiceImpl implements CustomerService {
         // 快速路径：分片已存在，直接幂等返回（省掉一次磁盘写入）
         Long count = fileChunkInfoMapper.selectCountByMd5AndChunkNum(fileMd5, chunkNumber);
         if (count > 0) {
-            log.info("## 分片已存在: fileMd5={}, chunkNumber={}", fileMd5, chunkNumber);
+            // ⚠️ 光看分片表不够：主记录可能已被删除，而分片是残留（历史脏数据；
+            //    正常路径下 deleteMarkdownFile 会连分片一并清理）。
+            //    此时若直接返回，主记录永远重建不出来，mergeChunk 恒报 MERGE_CHUNK_NOT_FOUND。
+            if (Objects.nonNull(aiCustomerServiceFileStorageMapper.selectByMd5(fileMd5))) {
+                log.info("## 分片已存在: fileMd5={}, chunkNumber={}", fileMd5, chunkNumber);
+                return Response.success();
+            }
+
+            log.warn("## 主记录缺失但分片仍有残留，就地重建主记录: fileMd5={}", fileMd5);
+            restoreFileStorage(fileMd5, uploadChunkReqVO);
             return Response.success();
         }
 
@@ -330,6 +357,37 @@ public class CustomerServiceImpl implements CustomerService {
                         ? fileStorageDO.getTotalChunks() : uploadChunkReqVO.getTotalChunks());
 
         return Response.success();
+    }
+
+    /**
+     * 重建丢失的文件主记录（分片仍在、主记录已被删除的历史脏数据）
+     * <p>
+     * 仅在 {@code uploadChunk} 的快速路径中兜底调用——正常路径下删除文件会连分片一并清理，
+     * 这个分支理论上不会走到；一旦走到，说明库里已有「有分片、无主记录」的状态。
+     * <p>
+     * ⚠️ {@code uploadedChunks} 取分片表里的实际条数，而不是固定写 1：
+     * 这个 MD5 可能已经攒了多个分片，写成 1 会让 {@code mergeChunk} 的
+     * 「已上传分片数 != 总分片数」校验误判为分片不完整。
+     *
+     * @param fileMd5 文件 MD5
+     * @param reqVO   本次上传请求，提供文件名、文件大小与总分片数
+     */
+    private void restoreFileStorage(String fileMd5, UploadChunkReqVO reqVO) {
+        int uploadedChunks = fileChunkInfoMapper.selecChunkedtList(fileMd5).size();
+        LocalDateTime now = LocalDateTime.now();
+
+        aiCustomerServiceFileStorageMapper.insertFileIgnoreDuplicate(
+                AiCustomerServiceFileStorageDO.builder()
+                        .fileMd5(fileMd5)
+                        .fileName(reqVO.getFileName())
+                        .fileSize(reqVO.getFileSize())
+                        .totalChunks(reqVO.getTotalChunks())
+                        .uploadedChunks(uploadedChunks) // 已存在的分片数，不是 1
+                        .status(AiCustomerServiceFileStatusEnum.UPLOADING.getCode()) // 仍需继续上传，状态回到上传中
+                        .storedFileName(Strings.EMPTY)
+                        .createTime(now)
+                        .updateTime(now)
+                        .build());
     }
 
     /**
