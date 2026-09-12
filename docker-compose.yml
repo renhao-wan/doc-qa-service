@@ -1,0 +1,47 @@
+# doc-qa-service 本地依赖编排
+#
+# 当前只包含数据库。应用本身与 SearXNG 待「Docker 化」阶段再加入本文件，
+# 届时 app 服务直接挂到 doc-qa-net 上，用服务名 postgres 访问数据库，
+# 不再需要 ports 映射。
+#
+# 启动：docker compose up -d
+# 查看：docker compose ps
+# 日志：docker compose logs -f postgres
+# 停止：docker compose down          （保留数据卷）
+# 清库：docker compose down -v       （连同数据卷一起删除，慎用）
+
+services:
+  postgres:
+    # 官方 pgvector 镜像 = postgres 16 + 预编译好的 pgvector 扩展
+    # 注意：postgres:16-alpine 官方镜像【不含】pgvector，必须用这个
+    image: pgvector/pgvector:pg16
+    container_name: doc-qa-postgres
+    restart: unless-stopped
+    environment:
+      # 与 application-dev.yml 中的数据源配置保持一致
+      POSTGRES_DB: robot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Asia/Shanghai
+    ports:
+      # 宿主机 IDE 直连用；将来 app 并入同一网络后可去掉
+      - "5432:5432"
+    volumes:
+      - doc-qa-pg-data:/var/lib/postgresql/data
+      # 仅在数据卷为空（首次启动）时执行，之后改动不会重跑
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d robot" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - doc-qa-net
+
+volumes:
+  doc-qa-pg-data:
+
+networks:
+  doc-qa-net:
+    name: doc-qa-net
