@@ -61,3 +61,11 @@ customer-service: # AI 智能客服
   model: deepseek-v3 # 模型名称
   temperature: 0.0 # 温度值
 
+auth: # 认证与授权
+  jwt:
+    # ⚠️ 不得硬编码真实密钥：application-dev.yml 被 git 跟踪，硬编码等于把签名密钥提交进版本库
+    #    （与 DASHSCOPE_API_KEY 是同一类问题）。默认值刻意写成一句刺眼的提示语，
+    #    仅服务于本地开发开箱即用；生产必须通过环境变量 JWT_SECRET 覆盖。
+    secret: ${JWT_SECRET:dev-only-insecure-secret-override-in-prod}
+    expire-days: 7 # token 有效期（天）
+
