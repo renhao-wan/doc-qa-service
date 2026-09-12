@@ -48,6 +48,8 @@ COMMENT ON TABLE t_user IS '用户';
 COMMENT ON COLUMN t_user.password_hash IS 'BCrypt 哈希（固定 60 字符），明文不落库';
 
 -- 预置演示账号，密码均为 demo123。明文只在本行注释里保留——开发库限定。
+-- ⚠️ 仅限**本地开发**：生产部署**不得**执行本脚本的预置账号段（应从本文件删掉或
+--    改由正式的开通流程生成账号），否则会带上两个密码可公开推知的登录凭证。
 -- 哈希由 BCryptPasswordEncoder 兼容的算法生成（$2b$ 前缀，Spring Security 的
 -- BCrypt 实现支持 $2a$ / $2b$ / $2y$ 三种前缀）。
 INSERT INTO t_user (username, password_hash, nickname)

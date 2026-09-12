@@ -8,6 +8,12 @@
 --
 --    全部语句都带 IF NOT EXISTS / WHERE 条件，重复执行是安全的。
 --    等引入 Flyway（TODO 阶段四）后，本文件会以 V2__auth.sql 的形式被正式接管。
+--
+-- ⚠️ 比较两条供给路径（本脚本 vs 01-schema.sql）的结构时，请按「集合」而非「列序」：
+--    ALTER TABLE ADD COLUMN 只能把新列追加到表尾，所以本脚本跑完后 t_chat 是
+--    (…, update_time, user_id)、文件表是 (…, update_time, uploader_id)，
+--    而 01-schema.sql 建出的表把 user_id / uploader_id 放在中间。
+--    列类型、可空性、默认值、索引、COMMENT 全都一致，仅物理列序不同——这是 ADD COLUMN 的固有结果。
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -31,6 +37,8 @@ COMMENT ON TABLE t_user IS '用户';
 COMMENT ON COLUMN t_user.password_hash IS 'BCrypt 哈希（固定 60 字符），明文不落库';
 
 -- 预置演示账号，密码均为 demo123。明文只在本行注释里保留——开发库限定。
+-- ⚠️ 仅限**本地开发**：生产部署**不得**执行本脚本（或其预置账号段），
+--    否则会带上两个密码可公开推知的登录凭证；生产账号应由正式的开通流程生成。
 -- 哈希由 BCryptPasswordEncoder 兼容的算法生成（$2b$ 前缀，Spring Security 的
 -- BCrypt 实现支持 $2a$ / $2b$ / $2y$ 三种前缀）。
 INSERT INTO t_user (username, password_hash, nickname)
@@ -52,7 +60,10 @@ WHERE user_id = 0;
 -- 漏写会直接报错而不是静默落到 user_id=0 的「无主」状态
 ALTER TABLE t_chat ALTER COLUMN user_id DROP DEFAULT;
 
-COMMENT ON COLUMN t_chat.user_id IS '归属用户 ID，逻辑关联 t_user.id';
+-- ⚠️ 注释必须与 db/init/01-schema.sql 中同名语句逐字一致：
+-- COMMENT 语句会写进 pg_description，注释分叉即 schema 分叉，
+-- 「迁移既有库」与「全新部署」两条路径就收敛不到同一形态。
+COMMENT ON COLUMN t_chat.user_id IS '归属用户 ID，逻辑关联 t_user.id；对话按用户隔离';
 
 -- ------------------------------------------------------------
 -- 3. 对话列表的索引必须跟着查询条件一起改
