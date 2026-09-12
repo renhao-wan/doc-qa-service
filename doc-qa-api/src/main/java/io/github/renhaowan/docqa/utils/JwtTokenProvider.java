@@ -20,7 +20,7 @@ import java.util.Date;
  * <p>
  * ⚠️ 签名算法是**按键长自动选档**的，不是写死的 HS256：{@code Keys.hmacShaKeyFor()} 会按密钥
  * 字节数挑 HS256 / HS384 / HS512（阈值见构造器注释），短于 32 字节直接抛 {@code WeakKeyException}。
- * 也就是说换了 {@code JWT_SECRET} 就等于换了算法——dev 默认密钥 40 字节 → 实际 HS256。
+ * 也就是说换了 {@code JWT_SECRET} 就等于换了算法——dev 默认密钥 41 字节 → 实际 HS256。
  **/
 @Component
 @Slf4j

@@ -19,9 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class JwtTokenProviderTests {
 
     /**
-     * ⚠️ HS256 要求密钥至少 256 bit（32 字节）。短于 32 字节时
+     * ⚠️ 密钥不得短于 256 bit（32 字节）：短于此时
      * {@code Keys.hmacShaKeyFor()} 会抛 WeakKeyException，
      * 表现出来是「应用启动就失败」，很容易被误认成配置没读到。
+     * 注意签名算法**不是写死的 HS256** —— 它按键长自动选档
+     * （≥64 字节 → HS512、≥48 字节 → HS384、≥32 字节 → HS256），
+     * 下面这个 53 字节的密钥实际走的是 <b>HS384</b>。
      */
     private static final String SECRET = "test-secret-must-be-at-least-32-bytes-long-0123456789";
 

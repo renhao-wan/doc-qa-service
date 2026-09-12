@@ -110,7 +110,7 @@ auth:
 | 类 | 职责 |
 |---|---|
 | `config/SecurityConfig` | `SecurityFilterChain`（无状态 / CSRF 关闭 / 放行 `/auth/login`）、`BCryptPasswordEncoder` Bean、`AuthenticationEntryPoint`、`AccessDeniedHandler` |
-| `utils/JwtTokenProvider` | 签发与解析 token，payload 含 `userId` + `username`；签名算法由密钥长度决定（`Keys.hmacShaKeyFor` 按键长自动选档，dev 默认密钥 40 字节 → 实际 HS256） |
+| `utils/JwtTokenProvider` | 签发与解析 token，payload 含 `userId` + `username`；签名算法由密钥长度决定（`Keys.hmacShaKeyFor` 按键长自动选档，dev 默认密钥 41 字节 → 实际 HS256） |
 | `filter/JwtAuthenticationFilter` | `OncePerRequestFilter`，解析 `Authorization: Bearer` → 构造 `Authentication` 填入 `SecurityContextHolder` |
 | `controller/AuthController` | `POST /auth/login` |
 | `service/AuthService` + `impl/AuthServiceImpl` | 查 `t_user` → `passwordEncoder.matches()` → 签发 token |
