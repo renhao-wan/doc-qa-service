@@ -15,8 +15,7 @@
         </a-form-item>
 
         <a-form-item label="密码" name="password" :rules="[{ required: true, message: '请输入密码' }]">
-          <a-input-password v-model:value="formState.password" size="large" placeholder="请输入密码"
-            @press-enter="handleLogin" />
+          <a-input-password v-model:value="formState.password" size="large" placeholder="请输入密码" />
         </a-form-item>
 
         <a-button type="primary" html-type="submit" size="large" block :loading="loading">
