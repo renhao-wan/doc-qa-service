@@ -16,8 +16,21 @@
           </div>
         </a-tooltip>
 
-      <!-- 右下角浮动设置按钮 -->
-      <div class="fixed top-4 right-4 z-10">
+      <!-- 右上角：当前用户与退出登录 + 浮动设置按钮 -->
+      <!-- 本页不经过 Layout，用不到 Sidebar，所以 Sidebar 上那份「当前用户 + 退出登录」
+           在这里是看不见的——演示「A 退出、B 登录」时站在知识库页上就没法登出，故在此另放一份。
+           显示规则与 Sidebar 保持一致：nickname 优先，为空时退回 username。 -->
+      <div class="fixed top-4 right-4 z-10 flex items-center gap-2">
+        <div class="h-10 pl-3 pr-1.5 rounded-full bg-white border border-gray-200 shadow-xs flex items-center">
+          <SvgIcon name="ai-robot-logo" customCss="w-5 h-5 mr-2 text-gray-400"></SvgIcon>
+          <span class="text-sm text-gray-600 max-w-[10rem] truncate">{{ authStore.nickname || authStore.username }}</span>
+          <a-tooltip title="退出登录">
+            <button class="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 cursor-pointer hover:bg-gray-100 hover:text-gray-600 transition-all duration-200" @click="handleLogout">
+              <LogoutOutlined />
+            </button>
+          </a-tooltip>
+        </div>
+
         <a-tooltip placement="left">
           <!-- Tooltip 提示文字 -->
           <template #title>
@@ -246,7 +259,7 @@ import ChatInputBox from '@/components/ChatInputBox.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { useAuthStore } from '@/stores/authStore'
-import { UploadOutlined, SearchOutlined, RedoOutlined } from '@ant-design/icons-vue'
+import { UploadOutlined, SearchOutlined, RedoOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 import { findMarkdownFilePageList, deleteMarkdownFile, updateMarkdownFile, uploadFileChunk, mergeFileChunk, checkFile } from '@/api/customerService'
 import { message } from 'ant-design-vue'
 import { filesize } from 'filesize'
@@ -261,6 +274,13 @@ const authStore = useAuthStore()
 // 返回首页
 const jumpHomePage = () => {
   router.push({ name: 'Index' })
+}
+
+// 退出登录：与 Sidebar.handleLogout 一致——清本地登录态后回登录页。
+// 后端是无状态 JWT，签发后在有效期内始终有效，服务端没有会话可失效。
+const handleLogout = () => {
+  authStore.clear()
+  router.push('/login')
 }
 
 // 输入的消息
