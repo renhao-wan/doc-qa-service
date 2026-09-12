@@ -1,5 +1,6 @@
 package io.github.renhaowan.docqa;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -7,6 +8,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.charset.StandardCharsets;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -28,6 +31,9 @@ class AuthApiTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void testLoginSuccess() throws Exception {
@@ -58,5 +64,46 @@ class AuthApiTests {
                         .content("{\"username\":\"nobody\",\"password\":\"whatever\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.errorCode").value("30000"));
+    }
+
+    @Test
+    void testUnauthenticatedRequestRejected() throws Exception {
+        // 不带 token 访问任意业务接口
+        mockMvc.perform(post("/chat/list")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"current\":1,\"size\":10}"))
+                .andExpect(status().isOk()) // ⚠️ 是 200，不是 401
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("30001"));
+    }
+
+    @Test
+    void testAuthenticatedRequestPasses() throws Exception {
+        String token = login("demo", "demo123");
+
+        mockMvc.perform(post("/chat/list")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"current\":1,\"size\":10}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    /**
+     * 登录并取出 token
+     *
+     * @param username 用户名
+     * @param password 密码
+     * @return JWT 字符串
+     */
+    private String login(String username, String password) throws Exception {
+        String body = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        return objectMapper.readTree(body).path("data").path("token").asText();
     }
 }

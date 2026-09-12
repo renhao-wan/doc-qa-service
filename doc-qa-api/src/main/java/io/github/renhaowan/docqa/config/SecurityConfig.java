@@ -2,6 +2,7 @@ package io.github.renhaowan.docqa.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.renhaowan.docqa.enums.ResponseCodeEnum;
+import io.github.renhaowan.docqa.filter.JwtAuthenticationFilter;
 import io.github.renhaowan.docqa.utils.Response;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -37,14 +39,19 @@ public class SecurityConfig {
      * 不要自己 new ObjectMapper——那样会丢掉全局的时间格式等配置。
      */
     private final ObjectMapper objectMapper;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(ObjectMapper objectMapper) {
+    public SecurityConfig(ObjectMapper objectMapper, JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.objectMapper = objectMapper;
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // 把 JWT 过滤器插在用户名密码过滤器之前——本项目不用表单登录，
+                // 这个位置实际就是「所有授权判断之前」，正是解析 token 的时机
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 // 无状态 JWT：不需要 CSRF token（没有 cookie 会话可被伪造），
                 // 也不需要 HttpSession（每个请求都靠 token 自证身份）
                 .csrf(AbstractHttpConfigurer::disable)
