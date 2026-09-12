@@ -25,6 +25,37 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ------------------------------------------------------------
+-- 用户表
+--
+-- 放在所有业务表之前：t_chat.user_id 与 t_ai_customer_service_file_storage.uploader_id
+-- 逻辑上指向 t_user.id（本项目与其他表一致，不建外键，关联由应用层维护）。
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS t_user
+(
+    id            BIGSERIAL    PRIMARY KEY,
+    username      VARCHAR(64)  NOT NULL,
+    password_hash VARCHAR(100) NOT NULL,
+    nickname      VARCHAR(64),
+    create_time   TIMESTAMP    NOT NULL DEFAULT now(),
+    update_time   TIMESTAMP    NOT NULL DEFAULT now()
+);
+
+-- 用户名唯一。必须 NOT NULL + 唯一索引：PostgreSQL 的唯一索引不约束 NULL，
+-- 允许 NULL 的话可以插入任意多行 username 为 NULL 的记录，登录时的按名查询也无从谈起。
+CREATE UNIQUE INDEX IF NOT EXISTS uk_t_user_username ON t_user (username);
+
+COMMENT ON TABLE t_user IS '用户';
+COMMENT ON COLUMN t_user.password_hash IS 'BCrypt 哈希（固定 60 字符），明文不落库';
+
+-- 预置演示账号，密码均为 demo123。明文只在本行注释里保留——开发库限定。
+-- 哈希由 BCryptPasswordEncoder 兼容的算法生成（$2b$ 前缀，Spring Security 的
+-- BCrypt 实现支持 $2a$ / $2b$ / $2y$ 三种前缀）。
+INSERT INTO t_user (username, password_hash, nickname)
+VALUES ('demo',  '$2b$10$hhFzXa78QJ7kFZAaVO2aK.J2HlOhQWJzrxp7/uI8dXW.4bCvtgK4a', '演示账号 A'),
+       ('demo2', '$2b$10$mgKXZgtlRKoUSyVPf499PeLUpNhugMOAvvXxb3JLEuW4WzlfR23c6', '演示账号 B')
+ON CONFLICT (username) DO NOTHING;
+
+-- ------------------------------------------------------------
 -- 对话表
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS t_chat
@@ -32,6 +63,7 @@ CREATE TABLE IF NOT EXISTS t_chat
     id          BIGSERIAL PRIMARY KEY,
     uuid        VARCHAR(64) NOT NULL,
     summary     VARCHAR(255),
+    user_id     BIGINT       NOT NULL,
     create_time TIMESTAMP NOT NULL DEFAULT now(),
     update_time TIMESTAMP NOT NULL DEFAULT now()
 );
@@ -39,13 +71,16 @@ CREATE TABLE IF NOT EXISTS t_chat
 -- uuid 全局唯一，前端路由 /chat/:chatId 直接用它定位对话
 CREATE UNIQUE INDEX IF NOT EXISTS uk_t_chat_uuid ON t_chat (uuid);
 
--- 对话列表按「最近活跃」倒序分页
-CREATE INDEX IF NOT EXISTS idx_t_chat_update_time ON t_chat (update_time DESC);
+-- 对话列表的查询是「WHERE user_id = ? ORDER BY update_time DESC」，
+-- 过滤列作前缀、排序列跟在后面，分页时可直接按索引取数、免排序。
+-- （同理见 t_chat_message 的 idx_t_chat_message_chat_uuid_id）
+CREATE INDEX IF NOT EXISTS idx_t_chat_user_update ON t_chat (user_id, update_time DESC);
 
 COMMENT ON TABLE t_chat IS '对话';
 COMMENT ON COLUMN t_chat.uuid IS '对话唯一标识，前端路由用';
 COMMENT ON COLUMN t_chat.summary IS '对话摘要，取首条消息前 20 字';
 COMMENT ON COLUMN t_chat.update_time IS '最后活跃时间：新建对话、以及每轮消息落库时更新；对话列表按它倒序';
+COMMENT ON COLUMN t_chat.user_id IS '归属用户 ID，逻辑关联 t_user.id；对话按用户隔离';
 
 -- ------------------------------------------------------------
 -- 对话消息表
@@ -89,6 +124,7 @@ CREATE TABLE IF NOT EXISTS t_ai_customer_service_file_storage
     total_chunks     INTEGER      NOT NULL,
     uploaded_chunks  INTEGER      NOT NULL DEFAULT 0,
     status           INTEGER      NOT NULL,
+    uploader_id      BIGINT       NOT NULL,
     remark           VARCHAR(512),
     create_time      TIMESTAMP    NOT NULL DEFAULT now(),
     update_time      TIMESTAMP    NOT NULL DEFAULT now(),
@@ -107,6 +143,7 @@ COMMENT ON COLUMN t_ai_customer_service_file_storage.file_md5 IS '文件 MD5，�
 COMMENT ON COLUMN t_ai_customer_service_file_storage.stored_file_name IS '合并后实际落盘的文件名（{时间戳}_{原始文件名}）。只存文件名不存绝对路径：目录由 customer-service.file-storage-path 推导，换机器或挪目录后记录依然有效。上传中（status=0）为空串';
 COMMENT ON COLUMN t_ai_customer_service_file_storage.status IS '处理状态：0 上传中 / 1 待向量化 / 2 向量化中 / 3 已完成 / 4 失败';
 COMMENT ON COLUMN t_ai_customer_service_file_storage.uploaded_chunks IS '已上传分片数。刻意冗余（可由 t_file_chunk_info 统计得出），用一次原子自增换掉高频 count(*)';
+COMMENT ON COLUMN t_ai_customer_service_file_storage.uploader_id IS '上传者用户 ID。文件全局共享可见，但只有上传者本人能删除与改备注';
 
 -- ------------------------------------------------------------
 -- 分片信息表
