@@ -5,6 +5,7 @@ import io.github.renhaowan.docqa.advisor.CustomChatMemoryAdvisor;
 import io.github.renhaowan.docqa.advisor.CustomStreamLoggerAndMessage2DBAdvisor;
 import io.github.renhaowan.docqa.advisor.NetworkSearchAdvisor;
 import io.github.renhaowan.docqa.aspect.ApiOperationLog;
+import io.github.renhaowan.docqa.domain.mapper.ChatMapper;
 import io.github.renhaowan.docqa.domain.mapper.ChatMessageMapper;
 import io.github.renhaowan.docqa.model.vo.chat.*;
 import io.github.renhaowan.docqa.service.ChatService;
@@ -56,6 +57,8 @@ public class ChatController {
 
     @Resource
     private ChatMessageMapper chatMessageMapper;
+    @Resource
+    private ChatMapper chatMapper;
     @Resource
     private TransactionTemplate transactionTemplate;
     @Resource
@@ -114,7 +117,7 @@ public class ChatController {
         }
 
         // 添加自定义打印流式对话日志 Advisor
-        advisors.add(new CustomStreamLoggerAndMessage2DBAdvisor(chatMessageMapper, aiChatReqVO, transactionTemplate));
+        advisors.add(new CustomStreamLoggerAndMessage2DBAdvisor(chatMessageMapper, chatMapper, aiChatReqVO, transactionTemplate));
 
         // 应用 Advisor 集合
         chatClientRequestSpec.advisors(advisors);

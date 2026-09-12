@@ -1,6 +1,7 @@
 package io.github.renhaowan.docqa.advisor;
 
 import io.github.renhaowan.docqa.domain.dos.ChatMessageDO;
+import io.github.renhaowan.docqa.domain.mapper.ChatMapper;
 import io.github.renhaowan.docqa.domain.mapper.ChatMessageMapper;
 import io.github.renhaowan.docqa.model.vo.chat.AiChatReqVO;
 import lombok.extern.slf4j.Slf4j;
@@ -29,13 +30,16 @@ import java.util.concurrent.atomic.AtomicReference;
 public class CustomStreamLoggerAndMessage2DBAdvisor implements StreamAdvisor {
 
     private final ChatMessageMapper chatMessageMapper;
+    private final ChatMapper chatMapper;
     private final AiChatReqVO aiChatReqVO;
     private final TransactionTemplate transactionTemplate;
 
     public CustomStreamLoggerAndMessage2DBAdvisor(ChatMessageMapper chatMessageMapper,
+                                                  ChatMapper chatMapper,
                                                   AiChatReqVO aiChatReqVO,
                                                   TransactionTemplate transactionTemplate) {
         this.chatMessageMapper = chatMessageMapper;
+        this.chatMapper = chatMapper;
         this.aiChatReqVO = aiChatReqVO;
         this.transactionTemplate = transactionTemplate;
     }
@@ -168,6 +172,11 @@ public class CustomStreamLoggerAndMessage2DBAdvisor implements StreamAdvisor {
                             .createTime(LocalDateTime.now())
                             .build());
                 }
+
+                // 3. 刷新对话的最后活跃时间。
+                // 对话列表按 update_time 倒序分页，而它原先只在新建对话时写过一次，
+                // 不更新的话排序会退化成按创建时间排，「刚聊完的对话」不会浮到列表顶部。
+                chatMapper.touchUpdateTime(chatUuid);
 
                 log.info("## 本轮对话落库完成: chatUuid={}, signalType={}, hasAssistantContent={}",
                         chatUuid, signalType, hasAssistantContent);
