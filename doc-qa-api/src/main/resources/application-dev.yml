@@ -26,6 +26,13 @@ spring:
           dimensions: 1536
     vectorstore:
       pgvector:
+        # 启动时自动建 t_vector_store 表与索引（SQL 全部为 IF NOT EXISTS，重复启动不会重建、不动已有数据）。
+        # ⚠️ Spring AI 中该开关**默认 false**：不开则表不存在，且应用启动毫无异常，
+        #    直到第一次向量检索/写入才报 BadSqlGrammarException（表现为文件向量化状态变 FAILED）。
+        # ⚠️ 仅限开发/测试环境使用：它需要 CREATE EXTENSION 权限；且多实例并发启动时
+        #    CREATE EXTENSION IF NOT EXISTS 并非原子，可能撞 pg_extension 唯一索引。
+        # 生产环境应关闭此项，改由 Flyway 等迁移工具建表（见 TODO 阶段四）。
+        initialize-schema: true
         index-type: HNSW # 索引类型
         distance-type: COSINE_DISTANCE # 距离类型
         dimensions: 1536 # 嵌入维度

@@ -5,8 +5,10 @@
 -- ============================================================
 
 -- pgvector 扩展
--- Spring AI 的 PgVectorStore 初始化时也会执行 CREATE EXTENSION IF NOT EXISTS vector，
--- 这里显式声明一是为了让表结构自解释，二是容器初始化阶段就用超级用户建好。
+-- 这里显式声明，让容器初始化阶段就用超级用户把扩展建好——
+-- 应用侧的 initialize-schema 虽然也会执行 CREATE EXTENSION IF NOT EXISTS vector，
+-- 但那需要连接账号具备建扩展权限，且多实例并发启动时并非原子操作。
+-- 扩展由基础设施建好，应用只负责用，是更稳妥的分工。
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ------------------------------------------------------------
@@ -89,14 +91,25 @@ CREATE TABLE IF NOT EXISTS t_file_chunk_info
 
 -- 唯一约束是分片重复上传的最终防线：
 -- 前端并发上传，应用层的「先查再插」存在竞态，靠这个索引兜底。
--- 代码侧需配合捕获 DuplicateKeyException 做幂等返回（见 TODO 阶段一 ③）。
+-- 代码侧配合 INSERT ... ON CONFLICT (file_md5, chunk_number) DO NOTHING 实现幂等
+-- （见 FileChunkInfoMapper.insertChunkIgnoreDuplicate）。
+-- ⚠️ 不能改成「插入后捕获 DuplicateKeyException」：PostgreSQL 中一旦违反约束，
+-- 整个事务立即进入 aborted 状态，而 uploadChunk 是 @Transactional 的，方法内 catch 救不回来。
 CREATE UNIQUE INDEX IF NOT EXISTS uk_file_chunk_md5_number ON t_file_chunk_info (file_md5, chunk_number);
 
 COMMENT ON TABLE t_file_chunk_info IS '上传分片信息';
 COMMENT ON COLUMN t_file_chunk_info.chunk_number IS '分片序号，从 0 开始';
 
 -- ------------------------------------------------------------
--- 向量表 t_vector_store 由 Spring AI 的 PgVectorStore 自动创建
--- （维度 1536，HNSW 索引，COSINE_DISTANCE，配置见 application-dev.yml），
--- 不要手工建表，否则字段结构与 starter 的预期不一致。
+-- 向量表 t_vector_store 刻意不在此创建
+--
+-- ⚠️ Spring AI 的 PgVectorStore **默认不初始化 schema**（initialize-schema 默认 false），
+-- 所以这张表不会「自动」出现。本项目在 application-dev.yml 里显式开启了
+-- initialize-schema: true，由应用启动时按那里的 dimensions / index-type / distance-type
+-- 建表（1536 维 / HNSW / COSINE_DISTANCE）。
+--
+-- 为什么不写在这里：字段结构必须与 starter 内部 SQL 严格一致，交给它自己建最不容易出错。
+-- 也不要手工建，否则结构对不上时插入报错、排查成本高。
+--
+-- 生产环境应关闭该开关，改由 Flyway 等迁移工具接管（见 TODO 阶段四）。
 -- ------------------------------------------------------------
