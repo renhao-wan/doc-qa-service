@@ -39,6 +39,13 @@ public class AiCustomerServiceFileStorageDO {
     private Integer totalChunks;
     private Integer uploadedChunks;
     private Integer status;
+    /**
+     * 上传者用户 ID。
+     * <p>
+     * 文件全局共享可见（列表查询不带用户过滤），但只有上传者本人能删除与改备注。
+     * 秒传场景下保持先传者：B 上传 A 已有的文件不会新建记录，这个字段仍是 A。
+     */
+    private Long uploaderId;
     private String remark;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

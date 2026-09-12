@@ -58,15 +58,19 @@ public interface AiCustomerServiceFileStorageMapper extends BaseMapper<AiCustome
      * <p>
      * ⚠️ 用 ON CONFLICT 而不是捕获异常，原因见 {@link FileChunkInfoMapper#insertChunkIgnoreDuplicate}：
      * PostgreSQL 中约束冲突会让整个事务进入 aborted 状态，catch 住也没用。
+     * <p>
+     * {@code ON CONFLICT DO NOTHING} 顺带实现了秒传场景下的归属语义：
+     * B 上传 A 已有的文件不会新建记录，{@code uploader_id} 保持为 A——
+     * 先传者即所有者，B 也借秒传「夺取」不到删除权。这是有意的。
      *
      * @param fileStorageDO 文件主记录
      * @return 影响行数：1 = 本次创建，0 = 已被并发请求创建
      */
     @Insert("""
             INSERT INTO t_ai_customer_service_file_storage
-                (file_md5, file_name, stored_file_name, file_size, total_chunks, uploaded_chunks, status, create_time, update_time)
+                (file_md5, file_name, stored_file_name, file_size, total_chunks, uploaded_chunks, status, uploader_id, create_time, update_time)
             VALUES
-                (#{fileMd5}, #{fileName}, #{storedFileName}, #{fileSize}, #{totalChunks}, #{uploadedChunks}, #{status}, #{createTime}, #{updateTime})
+                (#{fileMd5}, #{fileName}, #{storedFileName}, #{fileSize}, #{totalChunks}, #{uploadedChunks}, #{status}, #{uploaderId}, #{createTime}, #{updateTime})
             ON CONFLICT (file_md5) DO NOTHING
             """)
     int insertFileIgnoreDuplicate(AiCustomerServiceFileStorageDO fileStorageDO);

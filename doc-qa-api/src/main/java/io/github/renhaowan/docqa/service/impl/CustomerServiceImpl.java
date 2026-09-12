@@ -14,6 +14,7 @@ import io.github.renhaowan.docqa.event.AiCustomerServiceMdUploadedEvent;
 import io.github.renhaowan.docqa.exception.BizException;
 import io.github.renhaowan.docqa.model.vo.customerService.*;
 import io.github.renhaowan.docqa.service.CustomerService;
+import io.github.renhaowan.docqa.utils.AuthContext;
 import io.github.renhaowan.docqa.utils.PageResponse;
 import io.github.renhaowan.docqa.utils.Response;
 import jakarta.annotation.Resource;
@@ -77,6 +78,13 @@ public class CustomerServiceImpl implements CustomerService {
         // 若记录不存在
         if (Objects.isNull(aiCustomerServiceFileStorageDO)) {
             throw new BizException(ResponseCodeEnum.MARKDOWN_FILE_NOT_FOUND);
+        }
+
+        // 只有上传者本人能删除。这里刻意返回「无权操作」而不是「文件不存在」：
+        // 文件在列表里人人可见，谎称不存在只会让用户困惑——与对话侧的处理正好相反
+        // （对话是私有的，越权时谎称不存在才能真正不泄露其存在性，见 ChatServiceImpl）。
+        if (!Objects.equals(aiCustomerServiceFileStorageDO.getUploaderId(), AuthContext.getCurrentUserId())) {
+            throw new BizException(ResponseCodeEnum.MARKDOWN_FILE_NO_PERMISSION);
         }
 
         // 正在处理中的文件，无法删除
@@ -187,6 +195,18 @@ public class CustomerServiceImpl implements CustomerService {
         Long id = updateMarkdownFileReqVO.getId();
         // 备注
         String remark = updateMarkdownFileReqVO.getRemark();
+
+        // 先查记录：改备注同样只有上传者本人有权。
+        // 原来直接 updateById 再看影响行数，拿不到 uploader_id，无法做归属判断。
+        AiCustomerServiceFileStorageDO record = aiCustomerServiceFileStorageMapper.selectById(id);
+
+        if (Objects.isNull(record)) {
+            throw new BizException(ResponseCodeEnum.MARKDOWN_FILE_NOT_FOUND);
+        }
+
+        if (!Objects.equals(record.getUploaderId(), AuthContext.getCurrentUserId())) {
+            throw new BizException(ResponseCodeEnum.MARKDOWN_FILE_NO_PERMISSION);
+        }
 
         // 根据 ID 修改备注信息
         int count = aiCustomerServiceFileStorageMapper.updateById(AiCustomerServiceFileStorageDO.builder()
@@ -338,6 +358,7 @@ public class CustomerServiceImpl implements CustomerService {
                         .totalChunks(uploadChunkReqVO.getTotalChunks())
                         .uploadedChunks(1) // 本次创建，当前分片已计入，故初始为 1
                         .status(AiCustomerServiceFileStatusEnum.UPLOADING.getCode()) // 状态：上传中...
+                        .uploaderId(AuthContext.getCurrentUserId()) // 上传者，删改权限依据
                         .storedFileName(Strings.EMPTY) // 尚未合并，还没有落盘文件
                         .createTime(now)
                         .updateTime(now)
@@ -384,6 +405,7 @@ public class CustomerServiceImpl implements CustomerService {
                         .totalChunks(reqVO.getTotalChunks())
                         .uploadedChunks(uploadedChunks) // 已存在的分片数，不是 1
                         .status(AiCustomerServiceFileStatusEnum.UPLOADING.getCode()) // 仍需继续上传，状态回到上传中
+                        .uploaderId(AuthContext.getCurrentUserId()) // 重建时以本次请求者为归属人
                         .storedFileName(Strings.EMPTY)
                         .createTime(now)
                         .updateTime(now)
