@@ -81,17 +81,17 @@ COMMENT ON COLUMN t_chat_message.role IS '消息角色：user / assistant';
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS t_ai_customer_service_file_storage
 (
-    id              BIGSERIAL PRIMARY KEY,
-    file_md5        VARCHAR(64)  NOT NULL,
-    file_name       VARCHAR(255) NOT NULL,
-    file_path       VARCHAR(512) NOT NULL DEFAULT '',
-    file_size       BIGINT       NOT NULL DEFAULT 0,
-    total_chunks    INTEGER      NOT NULL,
-    uploaded_chunks INTEGER      NOT NULL DEFAULT 0,
-    status          INTEGER      NOT NULL,
-    remark          VARCHAR(512),
-    create_time     TIMESTAMP  NOT NULL DEFAULT now(),
-    update_time     TIMESTAMP  NOT NULL DEFAULT now(),
+    id               BIGSERIAL    PRIMARY KEY,
+    file_md5         VARCHAR(64)  NOT NULL,
+    file_name        VARCHAR(255) NOT NULL,
+    stored_file_name VARCHAR(512) NOT NULL DEFAULT '',
+    file_size        BIGINT       NOT NULL DEFAULT 0,
+    total_chunks     INTEGER      NOT NULL,
+    uploaded_chunks  INTEGER      NOT NULL DEFAULT 0,
+    status           INTEGER      NOT NULL,
+    remark           VARCHAR(512),
+    create_time      TIMESTAMP    NOT NULL DEFAULT now(),
+    update_time      TIMESTAMP    NOT NULL DEFAULT now(),
     CONSTRAINT ck_file_storage_status CHECK (status BETWEEN 0 AND 4),
     CONSTRAINT ck_file_storage_chunks CHECK (total_chunks > 0 AND uploaded_chunks >= 0)
 );
@@ -104,6 +104,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_file_storage_md5 ON t_ai_customer_service_f
 
 COMMENT ON TABLE t_ai_customer_service_file_storage IS '知识库文件存储记录';
 COMMENT ON COLUMN t_ai_customer_service_file_storage.file_md5 IS '文件 MD5，用于秒传与断点续传';
+COMMENT ON COLUMN t_ai_customer_service_file_storage.stored_file_name IS '合并后实际落盘的文件名（{时间戳}_{原始文件名}）。只存文件名不存绝对路径：目录由 customer-service.file-storage-path 推导，换机器或挪目录后记录依然有效。上传中（status=0）为空串';
 COMMENT ON COLUMN t_ai_customer_service_file_storage.status IS '处理状态：0 上传中 / 1 待向量化 / 2 向量化中 / 3 已完成 / 4 失败';
 COMMENT ON COLUMN t_ai_customer_service_file_storage.uploaded_chunks IS '已上传分片数。刻意冗余（可由 t_file_chunk_info 统计得出），用一次原子自增换掉高频 count(*)';
 

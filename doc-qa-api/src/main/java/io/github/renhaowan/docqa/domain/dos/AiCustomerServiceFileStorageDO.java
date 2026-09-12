@@ -26,8 +26,15 @@ public class AiCustomerServiceFileStorageDO {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String fileMd5;
+    /** 上传时的原始文件名，仅用于展示 */
     private String fileName;
-    private String filePath;
+    /**
+     * 合并后实际落盘的文件名（{@code {时间戳}_{原始文件名}}）。
+     * <p>
+     * 刻意只存文件名、不存绝对路径：所在目录由 {@code customer-service.file-storage-path}
+     * 推导，这样换机器或挪目录后历史记录依然有效（t_file_chunk_info.chunk_name 同理）。
+     */
+    private String storedFileName;
     private Long fileSize;
     private Integer totalChunks;
     private Integer uploadedChunks;

@@ -64,9 +64,9 @@ public interface AiCustomerServiceFileStorageMapper extends BaseMapper<AiCustome
      */
     @Insert("""
             INSERT INTO t_ai_customer_service_file_storage
-                (file_md5, file_name, file_path, file_size, total_chunks, uploaded_chunks, status, create_time, update_time)
+                (file_md5, file_name, stored_file_name, file_size, total_chunks, uploaded_chunks, status, create_time, update_time)
             VALUES
-                (#{fileMd5}, #{fileName}, #{filePath}, #{fileSize}, #{totalChunks}, #{uploadedChunks}, #{status}, #{createTime}, #{updateTime})
+                (#{fileMd5}, #{fileName}, #{storedFileName}, #{fileSize}, #{totalChunks}, #{uploadedChunks}, #{status}, #{createTime}, #{updateTime})
             ON CONFLICT (file_md5) DO NOTHING
             """)
     int insertFileIgnoreDuplicate(AiCustomerServiceFileStorageDO fileStorageDO);

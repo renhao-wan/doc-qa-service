@@ -92,12 +92,20 @@ public class CustomerServiceImpl implements CustomerService {
         // 删除向量化数据
         vectorStore.delete(String.format("mdStorageId == %s", id));
 
-        // 删除本地文件
-        String filePath = aiCustomerServiceFileStorageDO.getFilePath();
-        try {
-            FileUtils.forceDelete(new File(filePath));
-        } catch (IOException e) {
-            log.error("## Markdown 问答文件删除失败：", e);
+        // 删除本地文件。记录里只存了文件名，所在目录由 file-storage-path 推导
+        // （绝对化规则与合并时保持一致，见 mergeChunk）
+        String storedFileName = aiCustomerServiceFileStorageDO.getStoredFileName();
+
+        // ⚠️ 必须判空：UPLOADING 状态下还没合并出文件，stored_file_name 是空串，
+        // 而 new File(dir, "") 指向的是存储目录**本身**，FileUtils.forceDelete 对目录
+        // 是递归删除——不拦住的话会把整个文件存储目录删掉
+        if (Objects.nonNull(storedFileName) && !storedFileName.isBlank()) {
+            File storedFile = new File(Paths.get(fileStoragePath).toAbsolutePath().normalize().toFile(), storedFileName);
+            try {
+                FileUtils.forceDelete(storedFile);
+            } catch (IOException e) {
+                log.error("## Markdown 问答文件删除失败：{}", storedFileName, e);
+            }
         }
 
         return Response.success();
@@ -303,7 +311,7 @@ public class CustomerServiceImpl implements CustomerService {
                         .totalChunks(uploadChunkReqVO.getTotalChunks())
                         .uploadedChunks(1) // 本次创建，当前分片已计入，故初始为 1
                         .status(AiCustomerServiceFileStatusEnum.UPLOADING.getCode()) // 状态：上传中...
-                        .filePath(Strings.EMPTY)
+                        .storedFileName(Strings.EMPTY) // 尚未合并，还没有落盘文件
                         .createTime(now)
                         .updateTime(now)
                         .build());
@@ -352,8 +360,8 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // 创建文件目录。
-        // 绝对化 + 规范化，否则下面 finalFile.getAbsolutePath() 会把配置里的 "./" 原样带进去，
-        // 存到 file_path 就成了 "D:\...\doc-qa-api\.\data\files\xxx.md" 这种夹着 .\ 的怪路径。
+        // 绝对化 + 规范化，否则拼出来的路径会把配置里的 "./" 原样带进去，
+        // 得到 "D:\...\doc-qa-api\.\data\files" 这种夹着 .\ 的怪路径。
         // 注意 getAbsoluteFile() 只拼上工作目录、**不解析** "." 和 ".."，必须用 normalize()。
         File uploadDir = Paths.get(fileStoragePath).toAbsolutePath().normalize().toFile();
         try {
@@ -400,7 +408,7 @@ public class CustomerServiceImpl implements CustomerService {
         aiCustomerServiceFileStorageMapper.updateById(AiCustomerServiceFileStorageDO.builder()
                 .id(fileStorageDO.getId())
                 .status(AiCustomerServiceFileStatusEnum.PENDING.getCode()) // 合并完成，等待向量化
-                .filePath(finalFile.getAbsolutePath())
+                .storedFileName(finalFileName) // 只存文件名，目录由 file-storage-path 推导
                 .build());
 
         // 删除分片文件所在的目录和记录
