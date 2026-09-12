@@ -45,7 +45,9 @@ public class AuthServiceImpl implements AuthService {
         //    理论上存在时间侧信道可被用于同样的枚举。开发库的演示账号不构成实际风险，
         //    真要堵住需在 null 分支做一次等价的「假比对」，本次不做（见 spec §10）。
         if (Objects.isNull(user) || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            log.warn("## 登录失败: username={}", username);
+            // username 直接来自请求体，含 \r\n 时会被原样写进日志、伪造出额外的日志行，写前先剥离。
+            // String.valueOf 只是不让这条日志语句自身因 null 抛 NPE（Controller 路径有 @NotBlank 兜底）
+            log.warn("## 登录失败: username={}", String.valueOf(username).replaceAll("[\r\n]", "_"));
             throw new BizException(ResponseCodeEnum.AUTH_INVALID_CREDENTIALS);
         }
 

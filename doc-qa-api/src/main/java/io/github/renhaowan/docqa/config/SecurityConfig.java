@@ -48,8 +48,14 @@ public class SecurityConfig {
                 // 无状态 JWT：不需要 CSRF token（没有 cookie 会话可被伪造），
                 // 也不需要 HttpSession（每个请求都靠 token 自证身份）
                 .csrf(AbstractHttpConfigurer::disable)
-                // 前端经 Vite proxy 同源访问，不需要 CORS；真要有独立域名部署时再开，
-                // 届时必须一并放行 OPTIONS 预检（预检请求不携带 Authorization）
+                // ⚠️ 暂时不要加 CORS 配置，但原因不是「前端本来就同源」——那只是 axios 那条路径的现状。
+                //    Vite proxy 只覆盖走 axios 的接口；两个 SSE 接口在前端是**硬编码跨源直连**
+                //    http://localhost:8080（ChatPage.vue、CustomerServiceChatPage.vue），
+                //    改走 proxy 是 Task 8 的事。在那之前给它们加上 Authorization: Bearer，
+                //    浏览器就会先发 OPTIONS 预检，而预检请求不携带 Authorization，
+                //    于是落到下面的 anyRequest().authenticated() 上被回 30001。
+                //    也就是说：终态（Task 8 之后）仍同源，届时前后端都不需要 CORS；
+                //    如果将来真出现独立域名部署，再开 CORS，且必须一并放行 OPTIONS 预检。
                 .cors(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
