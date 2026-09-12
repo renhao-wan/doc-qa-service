@@ -67,8 +67,9 @@ public class JwtTokenProvider {
      *
      * @param token JWT 字符串
      * @return 用户 ID
-     * @throws io.jsonwebtoken.JwtException        签名无效 / 格式错误 / 已过期（过期是子类 ExpiredJwtException）
-     * @throws IllegalArgumentException            token 为 null 或空串，jjwt 在解析前即抛出
+     * @throws io.jsonwebtoken.JwtException 签名无效 / 格式错误 / 已过期（过期是子类 ExpiredJwtException）
+     * @throws IllegalArgumentException     token 为 null 或空串时 jjwt 在解析前即抛出；
+     *                                      sub 缺失或非数字时 {@code Long.valueOf} 抛出的 NumberFormatException 同属此类
      */
     public Long parseUserId(String token) {
         return Long.valueOf(parseClaims(token).getSubject());
@@ -78,9 +79,9 @@ public class JwtTokenProvider {
      * 解析出用户名
      *
      * @param token JWT 字符串
-     * @return 用户名
-     * @throws io.jsonwebtoken.JwtException        签名无效 / 格式错误 / 已过期（过期是子类 ExpiredJwtException）
-     * @throws IllegalArgumentException            token 为 null 或空串，jjwt 在解析前即抛出
+     * @return 用户名；token 不含 {@code username} claim 时返回 {@code null}
+     * @throws io.jsonwebtoken.JwtException 签名无效 / 格式错误 / 已过期（过期是子类 ExpiredJwtException）
+     * @throws IllegalArgumentException     token 为 null 或空串，jjwt 在解析前即抛出
      */
     public String parseUsername(String token) {
         return parseClaims(token).get(CLAIM_USERNAME, String.class);

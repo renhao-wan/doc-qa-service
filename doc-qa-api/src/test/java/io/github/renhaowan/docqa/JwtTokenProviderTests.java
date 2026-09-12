@@ -38,12 +38,12 @@ class JwtTokenProviderTests {
     @Test
     void testTamperedTokenRejected() {
         String token = provider.generateToken(42L, "demo");
-        // ⚠️ 改动位置取「倒数第 5 个字符」，不能取最后一个：
-        //    HS256 签名是 32 字节 = 256 bit，base64url 编码出 43 个字符（43 × 6 = 258 bit），
-        //    第 43 个字符只有高 4 位参与解码、低 2 位被丢弃 —— 改动它若高 4 位不变，
-        //    解出的签名与原签名逐字节相同，校验照样通过，测试会假通过。
-        //    实测该假通过概率约 6.2%（4/64），是实打实的 flaky。
-        //    倒数第 5 个字符完全落在 256 bit 的有效范围内，改动它必然改变签名。
+        // 篡改位置取「倒数第 5 个字符」而不是最后一个字符，是为健壮性 —— 两种位置在本测试下都稳定。
+        // 通用机制：无填充 base64url 的末字符不必然携带完整的 6 bit。当签名比特数不能被 6 整除时，
+        // 末字符会有若干低位比特被丢弃，改动它可能解出与原签名逐字节相同的字节串，校验照样通过。
+        // 本测试的实际配置：密钥 53 字节 → jjwt 按密钥长度选 HmacSHA384 → 48 字节签名
+        // （384 bit 恰能被 6 整除）→ 64 字符编码、无丢弃 bit，因此改末字符也是安全的；
+        // 倒数第 5 个字符则与签名长度无关地安全，故取此位置。
         int index = token.length() - 5;
         String tampered = token.substring(0, index)
                 + (token.charAt(index) == 'A' ? 'B' : 'A')
@@ -59,5 +59,14 @@ class JwtTokenProviderTests {
         String token = expiredProvider.generateToken(42L, "demo");
 
         assertThrows(ExpiredJwtException.class, () -> provider.parseUserId(token));
+    }
+
+    @Test
+    void testNullAndEmptyTokenRejected() {
+        // token 为 null 或空串时，jjwt 在验签之前就抛 IllegalArgumentException，
+        // 而不是 JwtException —— 调用方（如 JwtAuthenticationFilter）两类都必须捕获，
+        // 只 catch JwtException 会让这两种输入漏成 500。
+        assertThrows(IllegalArgumentException.class, () -> provider.parseUserId(null));
+        assertThrows(IllegalArgumentException.class, () -> provider.parseUserId(""));
     }
 }
