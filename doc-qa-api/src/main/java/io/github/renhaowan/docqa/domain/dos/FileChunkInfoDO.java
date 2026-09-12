@@ -27,7 +27,13 @@ public class FileChunkInfoDO {
     private Long id;
     private String fileMd5;
     private Integer chunkNumber;
-    private String chunkPath;
+    /**
+     * 分片文件名（如 0.chunk）
+     * <p>
+     * 刻意只存文件名而非绝对路径：所在目录可由 chunk-path 配置 + fileMd5 推导，
+     * 换机器或挪目录后历史记录依然有效。
+     */
+    private String chunkName;
     private Long chunkSize;
     private LocalDateTime createTime;
 }

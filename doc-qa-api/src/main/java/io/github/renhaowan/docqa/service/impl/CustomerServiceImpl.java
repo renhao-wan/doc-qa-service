@@ -271,7 +271,7 @@ public class CustomerServiceImpl implements CustomerService {
         int chunkInserted = fileChunkInfoMapper.insertChunkIgnoreDuplicate(FileChunkInfoDO.builder()
                 .fileMd5(fileMd5)
                 .chunkNumber(chunkNumber)
-                .chunkPath(chunkFile.getAbsolutePath()) // 分片文件存储路径
+                .chunkName(chunkFileName) // 只存文件名，所在目录由 chunk-path + fileMd5 推导
                 .chunkSize(chunk.getSize())
                 .createTime(LocalDateTime.now())
                 .build());
@@ -355,12 +355,16 @@ public class CustomerServiceImpl implements CustomerService {
         // 新建合并文件
         File finalFile = new File(uploadDir, finalFileName);
 
+        // 分片文件所在目录：由配置 + fileMd5 推导（记录里只存了文件名，不存绝对路径，
+        // 这样换机器或挪目录后历史记录依然有效）
+        String chunkDir = chunkPath + File.separator + fileMd5;
+
         // 合并分片
         try (FileOutputStream fos = new FileOutputStream(finalFile);
              BufferedOutputStream bos = new BufferedOutputStream(fos)) {
             for (FileChunkInfoDO chunkInfo : chunks) {
                 // 读取分片文件
-                File chunkFile = new File(chunkInfo.getChunkPath());
+                File chunkFile = new File(chunkDir, chunkInfo.getChunkName());
                 try (FileInputStream fis = new FileInputStream(chunkFile);
                      BufferedInputStream bis = new BufferedInputStream(fis)) {
 
@@ -385,7 +389,6 @@ public class CustomerServiceImpl implements CustomerService {
                 .build());
 
         // 删除分片文件所在的目录和记录
-        String chunkDir = chunkPath + File.separator + fileMd5;
         try {
             FileUtils.forceDelete(new File(chunkDir));
         } catch (IOException e) {

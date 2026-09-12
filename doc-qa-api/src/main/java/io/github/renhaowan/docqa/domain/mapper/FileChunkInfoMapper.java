@@ -58,8 +58,8 @@ public interface FileChunkInfoMapper extends BaseMapper<FileChunkInfoDO> {
      * @return 影响行数：1 = 确实是新分片，0 = 该分片已存在（并发重复提交）
      */
     @Insert("""
-            INSERT INTO t_file_chunk_info (file_md5, chunk_number, chunk_path, chunk_size, create_time)
-            VALUES (#{fileMd5}, #{chunkNumber}, #{chunkPath}, #{chunkSize}, #{createTime})
+            INSERT INTO t_file_chunk_info (file_md5, chunk_number, chunk_name, chunk_size, create_time)
+            VALUES (#{fileMd5}, #{chunkNumber}, #{chunkName}, #{chunkSize}, #{createTime})
             ON CONFLICT (file_md5, chunk_number) DO NOTHING
             """)
     int insertChunkIgnoreDuplicate(FileChunkInfoDO chunkInfo);
