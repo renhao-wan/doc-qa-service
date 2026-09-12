@@ -28,7 +28,10 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessageDO> {
         // 构建查询条件
         LambdaQueryWrapper<ChatMessageDO> wrapper = Wrappers.<ChatMessageDO>lambdaQuery()
                 .eq(ChatMessageDO::getChatUuid, chatId) // 对话 ID
-                .orderByDesc(ChatMessageDO::getCreateTime); // 按创建时间倒叙
+                // 按自增主键倒序：语义上等价于时间倒序，但 id 单调递增且唯一，
+                // 不受时间精度、重复值影响，分页时不会因排序值相等而出现重复或遗漏。
+                // 对应索引 idx_t_chat_message_chat_uuid_id (chat_uuid, id DESC)。
+                .orderByDesc(ChatMessageDO::getId);
 
         return selectPage(page, wrapper);
     }

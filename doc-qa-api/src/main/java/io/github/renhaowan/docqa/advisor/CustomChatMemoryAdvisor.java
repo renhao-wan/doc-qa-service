@@ -57,15 +57,18 @@ public class CustomChatMemoryAdvisor implements StreamAdvisor {
         // 对话 UUID
         String chatUuid = aiChatReqVO.getChatId();
 
-        // 查询数据库拉取最新的聊天消息
+        // 查询数据库拉取最新的聊天消息。
+        // 排序键用 id（BIGSERIAL，单调递增且唯一）而非 create_time：时间可能重复，
+        // 排序值相等时 LIMIT 取哪几条是不确定的，会导致消息顺序错乱。
+        // 索引 idx_t_chat_message_chat_uuid_id 正是 (chat_uuid, id DESC)，可免排序直接取数。
         List<ChatMessageDO> messages = chatMessageMapper.selectList(Wrappers.<ChatMessageDO>lambdaQuery()
                 .eq(ChatMessageDO::getChatUuid, chatUuid) // 查询指定对话 UUID 下的聊天记录
-                .orderByDesc(ChatMessageDO::getCreateTime) // 查询最新的消息
+                .orderByDesc(ChatMessageDO::getId) // 查询最新的消息
                 .last(String.format("LIMIT %d", limit))); // 仅查询 LIMIT 条
 
-        // 按发布时间升序排列
+        // 按自增主键升序排列，还原正常的对话先后顺序
         List<ChatMessageDO> sortedMessages = messages.stream()
-                 .sorted(Comparator.comparing(ChatMessageDO::getCreateTime)) // 升序排列
+                 .sorted(Comparator.comparing(ChatMessageDO::getId)) // 升序排列
                  .toList();
 
         // 所有消息
