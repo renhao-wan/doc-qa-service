@@ -19,7 +19,7 @@ spring:
   ai:
     openai:
       base-url: https://dashscope.aliyuncs.com/compatible-mode # OpenAI 服务的访问地址，这里使用的是阿里云百炼
-      api-key: xxx  # 填写阿里百炼 API Key, 改成你自己的
+      api-key: ${DASHSCOPE_API_KEY:xxx}  # 阿里百炼 API Key，从环境变量 DASHSCOPE_API_KEY 读取
       embedding:
         options:
           model: text-embedding-v4 # 向量化模型
