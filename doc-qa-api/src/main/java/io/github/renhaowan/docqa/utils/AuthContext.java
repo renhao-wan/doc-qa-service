@@ -25,6 +25,12 @@ public class AuthContext {
      * {@code map} / {@code flatMap} 等回调里：{@code SecurityContextHolder} 默认是
      * {@code MODE_THREADLOCAL}，流式回调可能跑在别的线程上，取到的是空的。
      * 本项目的所有归属校验都发生在进入流式返回之前，不受影响。
+     * <p>
+     * 另外，流式回答的**落库**（{@code CustomStreamLoggerAndMessage2DBAdvisor} 的
+     * {@code doFinally}）同样跑在 Reactor 回调里，在那里调用本方法一样取不到值。
+     * 那种场景必须把 userId 在同步阶段取出后**值传递**进去（沿用本项目
+     * 「每个请求 new 一个 Advisor 实例」的模式），不要在 advisor 内部调用本方法，
+     * 否则会抛 {@code BizException(30001)} 且整轮对话消息丢失。
      *
      * @return 用户 ID
      * @throws BizException 未认证（正常不该发生——SecurityFilterChain 已经拦过一道，

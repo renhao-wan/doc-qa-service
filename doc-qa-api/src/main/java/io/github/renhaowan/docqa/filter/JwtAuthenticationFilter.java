@@ -28,6 +28,12 @@ import java.util.Collections;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String AUTH_HEADER = "Authorization";
+    /**
+     * 前缀比较必须忽略大小写：RFC 6750 规定 scheme 大小写不敏感。
+     * 客户端 SDK、网关、代理都可能把 scheme 规范成小写（{@code bearer ...}），
+     * 按字面比较会把**有效**的 token 拒掉，而日志里只留下一条「未认证」，
+     * 排查方向会被带偏到「token 过期/伪造」上去。
+     */
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
@@ -42,7 +48,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String header = request.getHeader(AUTH_HEADER);
 
-        if (StringUtils.isNotBlank(header) && header.startsWith(BEARER_PREFIX)) {
+        if (StringUtils.isNotBlank(header)
+                && header.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
             String token = header.substring(BEARER_PREFIX.length());
 
             try {
