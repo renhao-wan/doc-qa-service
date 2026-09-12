@@ -4,6 +4,17 @@ server:
 spring:
   profiles:
     active: dev # 激活 dev 开发环境
+  servlet:
+    multipart:
+      # ⚠️ 知识库只走分片上传，整文件**从不**作为单个 part 传输 —— 这里必须容得下「一个分片」。
+      #    前端的分片大小是 CHUNK_SIZE（doc-qa-web/src/views/CustomerServiceChatPage.vue）的 2MB，
+      #    两处必须同步修改；分片要明显小于 max-file-size，**不要写成恰好相等** ——
+      #    那依赖「相等即通过」的边界语义，前端一改大就会静默失败。
+      #    不配这两项时走 Spring Boot 默认值（max-file-size=1MB），2MB 的分片会被 Tomcat 直接拒掉，
+      #    再被 GlobalExceptionHandler 兜底成 10000「出错啦，后台小哥正在努力修复中...」，
+      #    排查方向会被完全带偏（表现为「checkFile 说需上传，点上传就报错」）。
+      max-file-size: 3MB # 单个 part（也就是一个分片）的上限，约为分片大小的 1.5 倍
+      max-request-size: 5MB # 整个请求的上限，必须大于 max-file-size（一个请求 = 一个分片 + 少量文本字段 + boundary 开销）
 
 logging:
   config: classpath:log4j2.xml # 设置日志配置文件路径
