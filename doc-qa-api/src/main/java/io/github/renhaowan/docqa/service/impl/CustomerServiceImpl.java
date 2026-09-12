@@ -236,7 +236,7 @@ public class CustomerServiceImpl implements CustomerService {
         Integer chunkNumber = uploadChunkReqVO.getChunkNumber();
         MultipartFile chunk = uploadChunkReqVO.getChunk();
 
-        // 检查当前分片是否已上传
+        // 快速路径：分片已存在，直接幂等返回（省掉一次磁盘写入）
         Long count = fileChunkInfoMapper.selectCountByMd5AndChunkNum(fileMd5, chunkNumber);
         if (count > 0) {
             log.info("## 分片已存在: fileMd5={}, chunkNumber={}", fileMd5, chunkNumber);
@@ -263,40 +263,53 @@ public class CustomerServiceImpl implements CustomerService {
             throw new RuntimeException(e);
         }
 
-        // 保存分片记录
-        FileChunkInfoDO chunkInfo = FileChunkInfoDO.builder()
+        // 保存分片记录。
+        // 上面的 selectCount 与这里的写入之间仍存在竞态窗口（前端是 3 路并发上传），
+        // 所以走 ON CONFLICT DO NOTHING，由唯一索引 uk_file_chunk_md5_number 做最终裁决。
+        // 注意不能改成「捕获 DuplicateKeyException」：PostgreSQL 中约束冲突会让整个事务
+        // 进入 aborted 状态，后续语句全部失败，而本方法是 @Transactional 的，catch 也救不回来。
+        int chunkInserted = fileChunkInfoMapper.insertChunkIgnoreDuplicate(FileChunkInfoDO.builder()
                 .fileMd5(fileMd5)
                 .chunkNumber(chunkNumber)
                 .chunkPath(chunkFile.getAbsolutePath()) // 分片文件存储路径
                 .chunkSize(chunk.getSize())
-                .build();
-        fileChunkInfoMapper.insert(chunkInfo);
+                .createTime(LocalDateTime.now())
+                .build());
 
-        // 查询当前 MD5 对应的文件是否存在
-        AiCustomerServiceFileStorageDO fileStorageDO = aiCustomerServiceFileStorageMapper.selectByMd5(fileMd5);
-
-        // 已上传的分片数，默认为 1
-        int uploadedChunks = 1;
-
-        // 若不存在，写入数据
-        if (Objects.isNull(fileStorageDO)) {
-            fileStorageDO = AiCustomerServiceFileStorageDO.builder()
-                    .fileMd5(fileMd5)
-                    .fileName(uploadChunkReqVO.getFileName())
-                    .fileSize(uploadChunkReqVO.getFileSize()) // 原始文件大小
-                    .totalChunks(uploadChunkReqVO.getTotalChunks())
-                    .uploadedChunks(uploadedChunks) // 默认已上传分片数为 1
-                    .status(AiCustomerServiceFileStatusEnum.UPLOADING.getCode()) // 状态：上传中...
-                    .filePath(Strings.EMPTY)
-                    .build();
-            aiCustomerServiceFileStorageMapper.insert(fileStorageDO);
-        } else { // 存在，则进行更新操作，将已上传分片数 +1
-            aiCustomerServiceFileStorageMapper.incrementUploadedChunks(fileStorageDO.getId());
-            uploadedChunks += fileStorageDO.getUploadedChunks();
+        // 并发的另一个线程已写入过这条分片记录（也已计过数），这里幂等返回，不能重复计数
+        if (chunkInserted == 0) {
+            log.info("## 分片被并发请求抢先写入，幂等返回: fileMd5={}, chunkNumber={}", fileMd5, chunkNumber);
+            return Response.success();
         }
 
-        log.info("## 分片上传成功: fileMd5={}, chunkNumber={}, progress={}/{}",
-                fileMd5, chunkNumber, uploadedChunks, fileStorageDO.getTotalChunks());
+        // 写入文件主记录。首次上传时，并发的多个分片请求都会走到这里，
+        // 同样靠 ON CONFLICT 兜底：只有第一个真正创建记录，其余什么都不做。
+        LocalDateTime now = LocalDateTime.now();
+        int fileInserted = aiCustomerServiceFileStorageMapper.insertFileIgnoreDuplicate(
+                AiCustomerServiceFileStorageDO.builder()
+                        .fileMd5(fileMd5)
+                        .fileName(uploadChunkReqVO.getFileName())
+                        .fileSize(uploadChunkReqVO.getFileSize()) // 原始文件大小
+                        .totalChunks(uploadChunkReqVO.getTotalChunks())
+                        .uploadedChunks(1) // 本次创建，当前分片已计入，故初始为 1
+                        .status(AiCustomerServiceFileStatusEnum.UPLOADING.getCode()) // 状态：上传中...
+                        .filePath(Strings.EMPTY)
+                        .createTime(now)
+                        .updateTime(now)
+                        .build());
+
+        // 取回主记录（无论是本次创建的，还是并发请求先创建的），拿主键 ID 与总分片数
+        AiCustomerServiceFileStorageDO fileStorageDO = aiCustomerServiceFileStorageMapper.selectByMd5(fileMd5);
+
+        // 主记录不是本次创建的，说明是并发的其他分片请求先建的，
+        // 它当时只把自己那一片计了数，所以当前分片要单独补上
+        if (fileInserted == 0 && Objects.nonNull(fileStorageDO)) {
+            aiCustomerServiceFileStorageMapper.incrementUploadedChunks(fileStorageDO.getId());
+        }
+
+        log.info("## 分片上传成功: fileMd5={}, chunkNumber={}, totalChunks={}",
+                fileMd5, chunkNumber, Objects.nonNull(fileStorageDO)
+                        ? fileStorageDO.getTotalChunks() : uploadChunkReqVO.getTotalChunks());
 
         return Response.success();
     }

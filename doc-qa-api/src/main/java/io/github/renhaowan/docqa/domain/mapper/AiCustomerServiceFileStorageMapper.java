@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.github.renhaowan.docqa.domain.dos.AiCustomerServiceFileStorageDO;
+import org.apache.ibatis.annotations.Insert;
 
 import java.time.LocalDate;
 import java.util.Objects;
@@ -47,6 +48,28 @@ public interface AiCustomerServiceFileStorageMapper extends BaseMapper<AiCustome
         return selectOne(Wrappers.<AiCustomerServiceFileStorageDO>lambdaQuery()
                 .eq(AiCustomerServiceFileStorageDO::getFileMd5, fileMd5));
     }
+
+    /**
+     * 幂等写入文件主记录：若 file_md5 已存在，则什么都不做
+     * <p>
+     * 与分片表的唯一索引同理——{@code uploadChunk} 原来是「先 selectByMd5 判空再 insert」，
+     * 前端 3 路并发上传时，几个线程会同时读到 null、同时插入，
+     * 撞上 uk_file_storage_md5 后抛 DuplicateKeyException，接口直接失败。
+     * <p>
+     * ⚠️ 用 ON CONFLICT 而不是捕获异常，原因见 {@link FileChunkInfoMapper#insertChunkIgnoreDuplicate}：
+     * PostgreSQL 中约束冲突会让整个事务进入 aborted 状态，catch 住也没用。
+     *
+     * @param fileStorageDO 文件主记录
+     * @return 影响行数：1 = 本次创建，0 = 已被并发请求创建
+     */
+    @Insert("""
+            INSERT INTO t_ai_customer_service_file_storage
+                (file_md5, file_name, file_path, file_size, total_chunks, uploaded_chunks, status, create_time, update_time)
+            VALUES
+                (#{fileMd5}, #{fileName}, #{filePath}, #{fileSize}, #{totalChunks}, #{uploadedChunks}, #{status}, #{createTime}, #{updateTime})
+            ON CONFLICT (file_md5) DO NOTHING
+            """)
+    int insertFileIgnoreDuplicate(AiCustomerServiceFileStorageDO fileStorageDO);
 
     /**
      * 已上传分片数 +1
