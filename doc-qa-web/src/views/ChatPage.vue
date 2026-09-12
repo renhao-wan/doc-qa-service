@@ -55,18 +55,21 @@ import StreamMarkdownRender from '@/components/StreamMarkdownRender.vue'
 import LoadingDots from '@/components/LoadingDots.vue'
 import Layout from '@/layouts/Layout.vue'
 import ChatInputBox from '@/components/ChatInputBox.vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 // 导入Pinia store
 import { useChatStore } from '@/stores/chatStore'
+import { useAuthStore } from '@/stores/authStore'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { findChatMessagePageList } from '@/api/chat'
 
 // 获取 chat store
 const chatStore = useChatStore()
+const authStore = useAuthStore()
 
 console.log('首页传递过来的消息: ', history.state?.firstMessage)
 
 const route = useRoute()
+const router = useRouter()
 
 // 输入的消息
 const message = ref(history.state?.firstMessage || '')
@@ -205,13 +208,33 @@ const sendMessage = async (payload) => {
     const controller = new AbortController()
     const signal = controller.signal
 
-    fetchEventSource('http://localhost:8080/chat/completion', {
+    // 走 Vite proxy 的相对路径，不再硬编码 http://localhost:8080：
+    // 跨域直连 + Authorization 头会触发 OPTIONS 预检，而预检不带 token，必然被拒。
+    fetchEventSource('/api/chat/completion', {
       method: 'POST',
       signal: signal,
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authStore.token}`,
       },
       body: JSON.stringify(requestBody),
+      async onopen(response) {
+        // ⚠️ token 失效时后端返回的是 HTTP 200 + JSON（项目的错误约定），
+        //    而 fetchEventSource 只认 text/event-stream。不检查的话会把它当成
+        //    一个畸形的事件流，报出与真实原因毫无关系的解析错误。
+        const contentType = response.headers.get('content-type') || ''
+
+        if (!contentType.includes('text/event-stream')) {
+          const body = await response.json().catch(() => ({}))
+
+          if (body && body.errorCode === '30001') {
+            authStore.clear()
+            router.push('/login')
+          }
+
+          throw new Error(body?.message || '请求失败')
+        }
+      },
       onmessage(msg) {
         if (msg.event === '') {
           // 收到第一条数据后设置 loading 为 false

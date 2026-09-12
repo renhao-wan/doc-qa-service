@@ -245,6 +245,7 @@ import LoadingDots from '@/components/LoadingDots.vue'
 import ChatInputBox from '@/components/ChatInputBox.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { useAuthStore } from '@/stores/authStore'
 import { UploadOutlined, SearchOutlined, RedoOutlined } from '@ant-design/icons-vue'
 import { findMarkdownFilePageList, deleteMarkdownFile, updateMarkdownFile, uploadFileChunk, mergeFileChunk, checkFile } from '@/api/customerService'
 import { message } from 'ant-design-vue'
@@ -255,6 +256,7 @@ console.log('首页传递过来的消息: ', history.state?.firstMessage)
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 // 返回首页
 const jumpHomePage = () => {
@@ -303,13 +305,30 @@ const sendMessage = async () => {
     const controller = new AbortController()
     const signal = controller.signal
 
-    fetchEventSource('http://localhost:8080/customer-service/completion', {
+    // 走 Vite proxy 的相对路径，理由同 ChatPage：跨域 + Authorization 会触发预检
+    fetchEventSource('/api/customer-service/completion', {
       method: 'POST',
       signal: signal,
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authStore.token}`,
       },
       body: JSON.stringify(requestBody),
+      async onopen(response) {
+        // 同 ChatPage：token 失效时后端回的是 HTTP 200 + JSON，不是事件流
+        const contentType = response.headers.get('content-type') || ''
+
+        if (!contentType.includes('text/event-stream')) {
+          const body = await response.json().catch(() => ({}))
+
+          if (body && body.errorCode === '30001') {
+            authStore.clear()
+            router.push('/login')
+          }
+
+          throw new Error(body?.message || '请求失败')
+        }
+      },
       onmessage(msg) {
         if (msg.event === '') {
           // 收到第一条数据后设置 loading 为 false
