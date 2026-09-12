@@ -50,16 +50,6 @@ public class AiCustomerServiceController {
     @Value("${customer-service.temperature}")
     private Double temperature;
 
-//    /**
-//     * 问答 MD 文件上传
-//     * @param file
-//     * @return
-//     */
-//    @PostMapping(value = "/md/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-//    public Response<?> uploadMarkdownFile(@RequestPart(value = "file", required = false) MultipartFile file) {
-//        return customerService.uploadMarkdownFile(file);
-//    }
-
     @PostMapping("/file/check")
     @ApiOperationLog(description = "检查文件是否存在")
     public Response<CheckFileRspVO> checkFile(@RequestBody @Validated CheckFileReqVO checkFileReqVO) {

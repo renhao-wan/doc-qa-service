@@ -120,12 +120,6 @@ public class ChatController {
         chatClientRequestSpec.advisors(advisors);
 
         // 流式输出
-//        return chatClientRequestSpec
-//                .stream()
-//                .content()
-//                .mapNotNull(text -> AIResponse.builder().v(text).build()); // 构建返参 AIResponse
-
-        // 流式输出
         return chatClientRequestSpec
                 .stream()
                 .chatResponse()

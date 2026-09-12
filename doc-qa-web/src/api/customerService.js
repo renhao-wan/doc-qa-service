@@ -5,11 +5,6 @@ export function findMarkdownFilePageList(current, size, fileName, startDate, end
     return axios.post("/customer-service/file/list", {current, size, fileName, startDate, endDate})
 }
 
-// 上传 Markdown 问答文件
-// export function uploadMarkdownFile(form) {
-//     return axios.post("/customer-service/md/upload", form)
-// }
-
 // 上传问答文件分片
 export function uploadFileChunk(form, timeout = 30000) {
     return axios.post("/customer-service/file/upload-chunk", form, {

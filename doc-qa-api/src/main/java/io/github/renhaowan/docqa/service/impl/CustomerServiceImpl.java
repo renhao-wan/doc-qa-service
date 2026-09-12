@@ -19,8 +19,6 @@ import io.github.renhaowan.docqa.utils.Response;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,80 +57,6 @@ public class CustomerServiceImpl implements CustomerService {
     private VectorStore vectorStore;
     @Resource
     private FileChunkInfoMapper fileChunkInfoMapper;
-
-//    /**
-//     * 上传 Markdown 问答文件
-//     *
-//     * @param file
-//     * @return
-//     */
-//    @Override
-//    public Response<?> uploadMarkdownFile(MultipartFile file) {
-//        // 校验文件不能为空
-//        if (file == null || file.isEmpty()) {
-//            throw new BizException(ResponseCodeEnum.UPLOAD_FILE_CANT_EMPTY);
-//        }
-//
-//        // 获取原始文件名（去除空格）
-//        String originalFilename = StringUtils.trimToEmpty(file.getOriginalFilename());
-//
-//        // 验证文件类型，仅支持 Markdown
-//        if (StringUtils.isBlank(originalFilename) || !isMarkdownFile(originalFilename)) {
-//            throw new BizException(ResponseCodeEnum.ONLY_SUPPORT_MARKDOWN);
-//        }
-//
-//        try {
-//            // 重新生成文件名 (防止文件名冲突导致覆盖)
-//            String newFilename = UUID.randomUUID().toString() + "-" + originalFilename;
-//
-//            // 构建存储路径
-//            Path storageDirectory = Paths.get(mdStoragePath);
-//            Path targetPath = storageDirectory.resolve(newFilename);
-//
-//            // 确保目录存在
-//            Files.createDirectories(storageDirectory);
-//
-//            // 保存文件
-//            file.transferTo(targetPath.toFile());
-//
-//            // 记录操作日志
-//            log.info("## Markdown 问答文件存储成功, 文件名：{} -> 存储路径：{}", originalFilename, targetPath);
-//
-//            // 存储入库
-//            AiCustomerServiceFileStorageDO aiCustomerServiceFileStorageDO = AiCustomerServiceFileStorageDO.builder()
-//                    .originalFileName(originalFilename)
-//                    .newFileName(newFilename)
-//                    .filePath(targetPath.toString())
-//                    .fileSize(file.getSize())
-//                    .status(AiCustomerServiceMdStatusEnum.PENDING.getCode())
-//                    .createTime(LocalDateTime.now())
-//                    .updateTime(LocalDateTime.now())
-//                    .build();
-//
-//            aiCustomerServiceMdStorageMapper.insert(aiCustomerServiceFileStorageDO);
-//
-//            // 获取主键 ID
-//            Long id =  aiCustomerServiceFileStorageDO.getId();
-//
-//            // 元数据
-//            Map<String, Object> metadatas = Maps.newHashMap();
-//            metadatas.put("mdStorageId", id); // 关联的文件存储表主键 ID
-//            metadatas.put("originalFileName", originalFilename); // 文件原始名称
-//
-//            // 发布事件
-//            eventPublisher.publishEvent(AiCustomerServiceMdUploadedEvent.builder()
-//                            .id(id)
-//                            .filePath(targetPath.toString())
-//                            .metadatas(metadatas)
-//                            .build());
-//
-//            return Response.success();
-//
-//        } catch (IOException e) {
-//            log.error("## Markdown 问答文件上传失败：{}", originalFilename, e);
-//            throw new BizException(ResponseCodeEnum.UPLOAD_FILE_FAILED);
-//        }
-//    }
 
     /**
      * 删除 Markdown 问答文件
@@ -477,18 +401,5 @@ public class CustomerServiceImpl implements CustomerService {
                 .build());
 
         return Response.success();
-    }
-
-    /**
-     * 验证文件是否为 Markdown 格式
-     */
-    private boolean isMarkdownFile(String filename) {
-        if (StringUtils.isBlank(filename)) {
-            return false;
-        }
-
-        // 获取文件扩展名
-        String extension = FilenameUtils.getExtension(filename);
-        return StringUtils.equalsIgnoreCase(extension, "md");
     }
 }

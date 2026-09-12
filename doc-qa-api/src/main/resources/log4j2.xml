@@ -84,11 +84,5 @@ monitorInterval: 配置自动检测间隔(秒)，在此时间后检查配置文�
             <AppenderRef ref="ErrorAppender"/>
         </Root>
 
-        <!-- 设置特定包的日志级别（未来备用） -->
-        <Logger name="com.example.demo" level="debug" additivity="false">
-            <AppenderRef ref="Console"/>
-            <AppenderRef ref="FileAppender"/>
-            <AppenderRef ref="ErrorAppender"/>
-        </Logger>
     </Loggers>
 </Configuration>
