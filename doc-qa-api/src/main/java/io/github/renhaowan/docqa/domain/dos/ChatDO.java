@@ -27,6 +27,8 @@ public class ChatDO {
     private Long id;
     private String uuid;
     private String summary;
+    /** 归属用户 ID，对话按用户隔离 */
+    private Long userId;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

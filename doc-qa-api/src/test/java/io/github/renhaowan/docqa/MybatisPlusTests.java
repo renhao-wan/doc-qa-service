@@ -32,6 +32,7 @@ class MybatisPlusTests {
         chatMapper.insert(ChatDO.builder()
                         .uuid(UUID.randomUUID().toString())
                         .summary("新对话")
+                        .userId(1L) // 归属用户 ID：user_id 是 NOT NULL 且无默认值，必须显式指定
                         .createTime(LocalDateTime.now())
                         .updateTime(LocalDateTime.now())
                         .build());

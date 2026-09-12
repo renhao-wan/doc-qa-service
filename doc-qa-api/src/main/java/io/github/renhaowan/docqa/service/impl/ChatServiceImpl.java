@@ -11,6 +11,7 @@ import io.github.renhaowan.docqa.enums.ResponseCodeEnum;
 import io.github.renhaowan.docqa.exception.BizException;
 import io.github.renhaowan.docqa.model.vo.chat.*;
 import io.github.renhaowan.docqa.service.ChatService;
+import io.github.renhaowan.docqa.utils.AuthContext;
 import io.github.renhaowan.docqa.utils.PageResponse;
 import io.github.renhaowan.docqa.utils.Response;
 import io.github.renhaowan.docqa.utils.StringUtil;
@@ -60,6 +61,7 @@ public class ChatServiceImpl implements ChatService {
         chatMapper.insert(ChatDO.builder()
                 .summary(summary)
                 .uuid(uuid)
+                .userId(AuthContext.getCurrentUserId()) // 归属当前登录用户
                 .createTime(LocalDateTime.now())
                 .updateTime(LocalDateTime.now())
                 .build());
@@ -83,6 +85,12 @@ public class ChatServiceImpl implements ChatService {
         Long current = findChatHistoryMessagePageListReqVO.getCurrent();
         Long size = findChatHistoryMessagePageListReqVO.getSize();
         String chatId = findChatHistoryMessagePageListReqVO.getChatId();
+
+        // 归属校验：拿不到现成的 wrapper 可用（这里按 UUID 定位），
+        // 所以显式判一次，不通过就按「对话不存在」处理
+        if (!chatMapper.existsByUuidAndUserId(chatId, AuthContext.getCurrentUserId())) {
+            throw new BizException(ResponseCodeEnum.CHAT_NOT_EXISTED);
+        }
 
         // 执行分页查询
         Page<ChatMessageDO> chatMessageDOPage = chatMessageMapper.selectPageList(current, size, chatId);
@@ -120,7 +128,7 @@ public class ChatServiceImpl implements ChatService {
         Long size = findChatHistoryPageListReqVO.getSize();
 
         // 执行分页查询
-        Page<ChatDO> chatDOPage = chatMapper.selectPageList(current, size);
+        Page<ChatDO> chatDOPage = chatMapper.selectPageList(current, size, AuthContext.getCurrentUserId());
 
         List<ChatDO> chatDOS = chatDOPage.getRecords();
         // DO 转 VO
@@ -152,11 +160,17 @@ public class ChatServiceImpl implements ChatService {
         // 摘要
         String summary = renameChatReqVO.getSummary();
 
-        // 根据主键 ID 更新摘要
-        chatMapper.updateById(ChatDO.builder()
-                        .id(chatId)
-                        .summary(summary)
-                        .build());
+        // 归属条件融进更新语句：越权时影响行数为 0，自然落到「对话不存在」这一分支。
+        // 原先用 updateById 且不看影响行数——那意味着对不存在的 id 也静默返回成功，
+        // 顺带一并修正。
+        int count = chatMapper.update(null, Wrappers.<ChatDO>lambdaUpdate()
+                .eq(ChatDO::getId, chatId)
+                .eq(ChatDO::getUserId, AuthContext.getCurrentUserId())
+                .set(ChatDO::getSummary, summary));
+
+        if (count == 0) {
+            throw new BizException(ResponseCodeEnum.CHAT_NOT_EXISTED);
+        }
 
         return Response.success();
     }
@@ -175,7 +189,8 @@ public class ChatServiceImpl implements ChatService {
 
         // 删除对话
         int count = chatMapper.delete(Wrappers.<ChatDO>lambdaQuery()
-                .eq(ChatDO::getUuid, uuid));
+                .eq(ChatDO::getUuid, uuid)
+                .eq(ChatDO::getUserId, AuthContext.getCurrentUserId()));
 
         // 如果删除操作影响的行数为 0，说明想要删除的对话不存在
         if (count == 0) {

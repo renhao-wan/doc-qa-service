@@ -33,15 +33,25 @@ public class CustomStreamLoggerAndMessage2DBAdvisor implements StreamAdvisor {
     private final ChatMapper chatMapper;
     private final AiChatReqVO aiChatReqVO;
     private final TransactionTemplate transactionTemplate;
+    /**
+     * 本轮对话的归属用户 ID。
+     * <p>
+     * ⚠️ 这里是值传递而不是调用时现取 {@code AuthContext.getCurrentUserId()}：
+     * Advisor 在 {@code doFinally} 回调里落库，而该回调可能运行在 Reactor 的
+     * 其他线程上，{@code SecurityContextHolder}（默认 MODE_THREADLOCAL）在那里是空的。
+     */
+    private final Long ownerUserId;
 
     public CustomStreamLoggerAndMessage2DBAdvisor(ChatMessageMapper chatMessageMapper,
                                                   ChatMapper chatMapper,
                                                   AiChatReqVO aiChatReqVO,
-                                                  TransactionTemplate transactionTemplate) {
+                                                  TransactionTemplate transactionTemplate,
+                                                  Long ownerUserId) {
         this.chatMessageMapper = chatMessageMapper;
         this.chatMapper = chatMapper;
         this.aiChatReqVO = aiChatReqVO;
         this.transactionTemplate = transactionTemplate;
+        this.ownerUserId = ownerUserId;
     }
 
     @Override
@@ -176,7 +186,7 @@ public class CustomStreamLoggerAndMessage2DBAdvisor implements StreamAdvisor {
                 // 3. 刷新对话的最后活跃时间。
                 // 对话列表按 update_time 倒序分页，而它原先只在新建对话时写过一次，
                 // 不更新的话排序会退化成按创建时间排，「刚聊完的对话」不会浮到列表顶部。
-                chatMapper.touchUpdateTime(chatUuid);
+                chatMapper.touchUpdateTime(chatUuid, ownerUserId);
 
                 log.info("## 本轮对话落库完成: chatUuid={}, signalType={}, hasAssistantContent={}",
                         chatUuid, signalType, hasAssistantContent);

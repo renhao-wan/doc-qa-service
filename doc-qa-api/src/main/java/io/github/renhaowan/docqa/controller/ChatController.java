@@ -7,10 +7,13 @@ import io.github.renhaowan.docqa.advisor.NetworkSearchAdvisor;
 import io.github.renhaowan.docqa.aspect.ApiOperationLog;
 import io.github.renhaowan.docqa.domain.mapper.ChatMapper;
 import io.github.renhaowan.docqa.domain.mapper.ChatMessageMapper;
+import io.github.renhaowan.docqa.enums.ResponseCodeEnum;
+import io.github.renhaowan.docqa.exception.BizException;
 import io.github.renhaowan.docqa.model.vo.chat.*;
 import io.github.renhaowan.docqa.service.ChatService;
 import io.github.renhaowan.docqa.service.SearXNGService;
 import io.github.renhaowan.docqa.service.SearchResultContentFetcherService;
+import io.github.renhaowan.docqa.utils.AuthContext;
 import io.github.renhaowan.docqa.utils.PageResponse;
 import io.github.renhaowan.docqa.utils.Response;
 import jakarta.annotation.Resource;
@@ -88,6 +91,15 @@ public class ChatController {
         // 是否开启联网搜索
         boolean networkSearch = aiChatReqVO.getNetworkSearch();
 
+        // ⚠️ 归属校验必须在返回 Flux 之前同步完成：
+        //    一旦开始返回流式响应，异常就无法再变成 Response JSON 了（HTTP 头已发出）。
+        //    这是本项目最严重的一处越权——原实现只按 chatUuid 落库，
+        //    不校验的话 A 能往 B 的对话里写消息，直接污染别人的多轮上下文。
+        Long currentUserId = AuthContext.getCurrentUserId();
+        if (!chatMapper.existsByUuidAndUserId(aiChatReqVO.getChatId(), currentUserId)) {
+            throw new BizException(ResponseCodeEnum.CHAT_NOT_EXISTED);
+        }
+
         // 构建 ChatModel
         ChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(OpenAiApi.builder()
@@ -117,7 +129,7 @@ public class ChatController {
         }
 
         // 添加自定义打印流式对话日志 Advisor
-        advisors.add(new CustomStreamLoggerAndMessage2DBAdvisor(chatMessageMapper, chatMapper, aiChatReqVO, transactionTemplate));
+        advisors.add(new CustomStreamLoggerAndMessage2DBAdvisor(chatMessageMapper, chatMapper, aiChatReqVO, transactionTemplate, currentUserId));
 
         // 应用 Advisor 集合
         chatClientRequestSpec.advisors(advisors);
