@@ -1,6 +1,6 @@
-package io.github.renhaowan.docqa.model.vo.customerService;
+package io.github.renhaowan.docqa.model.vo.knowledgeBase;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,15 +11,15 @@ import lombok.NoArgsConstructor;
  * @author: Renhao-Wan
  * @url: https://github.com/Renhao-Wan
  * @date: 2023-09-15 14:07
- * @description: 文件检查
+ * @description: 删除 Markdown 问答文件
  **/
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class CheckFileReqVO {
+public class DeleteMarkdownFileReqVO {
 
-    @NotBlank(message = "文件 MD5 不能为空")
-    private String fileMd5;
+    @NotNull(message = "问答文件 ID 不能为空")
+    private Long id;
 
 }

@@ -14,14 +14,14 @@ import java.time.LocalDateTime;
  * @Author: Renhao-Wan
  * @Date: 2025/8/11 11:32
  * @Version: v1.0.0
- * @Description: AI 客服问答文件存储
+ * @Description: 企业知识库问答文件存储
  **/
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("t_ai_customer_service_file_storage")
-public class AiCustomerServiceFileStorageDO {
+@TableName("t_knowledge_base_file")
+public class KnowledgeBaseFileDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -31,8 +31,8 @@ public class AiCustomerServiceFileStorageDO {
     /**
      * 合并后实际落盘的文件名（{@code {时间戳}_{原始文件名}}）。
      * <p>
-     * 刻意只存文件名、不存绝对路径：所在目录由 {@code customer-service.file-storage-path}
-     * 推导，这样换机器或挪目录后历史记录依然有效（t_file_chunk_info.chunk_name 同理）。
+     * 刻意只存文件名、不存绝对路径：所在目录由 {@code knowledge-base.file-storage-path}
+     * 推导，这样换机器或挪目录后历史记录依然有效（t_knowledge_base_chunk.chunk_name 同理）。
      */
     private String storedFileName;
     private Long fileSize;

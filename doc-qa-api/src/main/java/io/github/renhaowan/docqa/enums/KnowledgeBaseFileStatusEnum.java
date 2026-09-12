@@ -7,11 +7,11 @@ import lombok.Getter;
  * @author: Renhao-Wan
  * @url: https://github.com/Renhao-Wan
  * @date: 2023-08-15 10:33
- * @description: AI 客服问答文件状态
+ * @description: 企业知识库问答文件状态
  **/
 @Getter
 @AllArgsConstructor
-public enum AiCustomerServiceFileStatusEnum {
+public enum KnowledgeBaseFileStatusEnum {
 
     UPLOADING(0, "上传中"),
     PENDING(1, "上传成功,待处理"),
@@ -27,11 +27,11 @@ public enum AiCustomerServiceFileStatusEnum {
      * @param code
      * @return
      */
-    public static AiCustomerServiceFileStatusEnum codeOf(Integer code) {
+    public static KnowledgeBaseFileStatusEnum codeOf(Integer code) {
         if (code == null) {
             return null;
         }
-        for (AiCustomerServiceFileStatusEnum status : values()) {
+        for (KnowledgeBaseFileStatusEnum status : values()) {
             if (status.getCode().equals(code)) {
                 return status;
             }

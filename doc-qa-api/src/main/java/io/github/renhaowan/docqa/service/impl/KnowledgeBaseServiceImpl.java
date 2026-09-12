@@ -4,16 +4,16 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.unit.DataSizeUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.common.collect.Maps;
-import io.github.renhaowan.docqa.domain.dos.AiCustomerServiceFileStorageDO;
-import io.github.renhaowan.docqa.domain.dos.FileChunkInfoDO;
-import io.github.renhaowan.docqa.domain.mapper.AiCustomerServiceFileStorageMapper;
-import io.github.renhaowan.docqa.domain.mapper.FileChunkInfoMapper;
-import io.github.renhaowan.docqa.enums.AiCustomerServiceFileStatusEnum;
+import io.github.renhaowan.docqa.domain.dos.KnowledgeBaseFileDO;
+import io.github.renhaowan.docqa.domain.dos.KnowledgeBaseChunkDO;
+import io.github.renhaowan.docqa.domain.mapper.KnowledgeBaseFileMapper;
+import io.github.renhaowan.docqa.domain.mapper.KnowledgeBaseChunkMapper;
+import io.github.renhaowan.docqa.enums.KnowledgeBaseFileStatusEnum;
 import io.github.renhaowan.docqa.enums.ResponseCodeEnum;
-import io.github.renhaowan.docqa.event.AiCustomerServiceMdUploadedEvent;
+import io.github.renhaowan.docqa.event.KnowledgeBaseFileUploadedEvent;
 import io.github.renhaowan.docqa.exception.BizException;
-import io.github.renhaowan.docqa.model.vo.customerService.*;
-import io.github.renhaowan.docqa.service.CustomerService;
+import io.github.renhaowan.docqa.model.vo.knowledgeBase.*;
+import io.github.renhaowan.docqa.service.KnowledgeBaseService;
 import io.github.renhaowan.docqa.utils.AuthContext;
 import io.github.renhaowan.docqa.utils.PageResponse;
 import io.github.renhaowan.docqa.utils.Response;
@@ -39,26 +39,26 @@ import java.util.stream.Collectors;
  * @Author: Renhao-Wan
  * @Date: 2025/8/11 15:48
  * @Version: v1.0.0
- * @Description: AI 客服
+ * @Description: 企业知识库
  **/
 @Service
 @Slf4j
-public class CustomerServiceImpl implements CustomerService {
+public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
-    @Value("${customer-service.file-storage-path}")
+    @Value("${knowledge-base.file-storage-path}")
     private String fileStoragePath;
 
-    @Value("${customer-service.chunk-path}")
+    @Value("${knowledge-base.chunk-path}")
     private String chunkPath;
 
     @Resource
-    private AiCustomerServiceFileStorageMapper aiCustomerServiceFileStorageMapper;
+    private KnowledgeBaseFileMapper aiKnowledgeBaseFileStorageMapper;
     @Resource
     private ApplicationEventPublisher eventPublisher; // 注入事件发布器
     @Resource
     private VectorStore vectorStore;
     @Resource
-    private FileChunkInfoMapper fileChunkInfoMapper;
+    private KnowledgeBaseChunkMapper knowledgeBaseChunkMapper;
 
     /**
      * 删除 Markdown 问答文件
@@ -73,36 +73,36 @@ public class CustomerServiceImpl implements CustomerService {
         Long id = deleteMarkdownFileReqVO.getId();
 
         // 查询该文件记录
-        AiCustomerServiceFileStorageDO aiCustomerServiceFileStorageDO = aiCustomerServiceFileStorageMapper.selectById(id);
+        KnowledgeBaseFileDO aiKnowledgeBaseFileStorageDO = aiKnowledgeBaseFileStorageMapper.selectById(id);
 
         // 若记录不存在
-        if (Objects.isNull(aiCustomerServiceFileStorageDO)) {
+        if (Objects.isNull(aiKnowledgeBaseFileStorageDO)) {
             throw new BizException(ResponseCodeEnum.MARKDOWN_FILE_NOT_FOUND);
         }
 
         // 只有上传者本人能删除。这里刻意返回「无权操作」而不是「文件不存在」：
         // 文件在列表里人人可见，谎称不存在只会让用户困惑——与对话侧的处理正好相反
         // （对话是私有的，越权时谎称不存在才能真正不泄露其存在性，见 ChatServiceImpl）。
-        if (!Objects.equals(aiCustomerServiceFileStorageDO.getUploaderId(), AuthContext.getCurrentUserId())) {
+        if (!Objects.equals(aiKnowledgeBaseFileStorageDO.getUploaderId(), AuthContext.getCurrentUserId())) {
             throw new BizException(ResponseCodeEnum.MARKDOWN_FILE_NO_PERMISSION);
         }
 
         // 正在处理中的文件，无法删除
-        AiCustomerServiceFileStatusEnum statusEnum = AiCustomerServiceFileStatusEnum.codeOf(aiCustomerServiceFileStorageDO.getStatus());
-        if (Objects.equals(statusEnum, AiCustomerServiceFileStatusEnum.PENDING) // 待向量化
-                || Objects.equals(statusEnum, AiCustomerServiceFileStatusEnum.VECTORIZING)) { // 向量化中...
+        KnowledgeBaseFileStatusEnum statusEnum = KnowledgeBaseFileStatusEnum.codeOf(aiKnowledgeBaseFileStorageDO.getStatus());
+        if (Objects.equals(statusEnum, KnowledgeBaseFileStatusEnum.PENDING) // 待向量化
+                || Objects.equals(statusEnum, KnowledgeBaseFileStatusEnum.VECTORIZING)) { // 向量化中...
             throw new BizException(ResponseCodeEnum.MARKDOWN_FILE_CANT_DELETE);
         }
 
         // 删除文件表记录
-        aiCustomerServiceFileStorageMapper.deleteById(id);
+        aiKnowledgeBaseFileStorageMapper.deleteById(id);
 
         // 删除向量化数据
         vectorStore.delete(String.format("mdStorageId == %s", id));
 
         // 删除本地文件。记录里只存了文件名，所在目录由 file-storage-path 推导
         // （绝对化规则与合并时保持一致，见 mergeChunk）
-        String storedFileName = aiCustomerServiceFileStorageDO.getStoredFileName();
+        String storedFileName = aiKnowledgeBaseFileStorageDO.getStoredFileName();
 
         // ⚠️ 必须判空：UPLOADING 状态下还没合并出文件，stored_file_name 是空串，
         // 而 new File(dir, "") 指向的是存储目录**本身**，FileUtils.forceDelete 对目录
@@ -117,12 +117,12 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // 清理分片残留：删除「上传中」（UPLOADING）的文件时，磁盘上的分片文件
-        // 与 t_file_chunk_info 记录必须一并回收——该状态是放行删除的，所以这是常规路径。
+        // 与 t_knowledge_base_chunk 记录必须一并回收——该状态是放行删除的，所以这是常规路径。
         // ⚠️ 不清理的话该 MD5 会永久卡死：重传时 checkFile 返回「需上传」，
         //    但 uploadChunk 的幂等快速路径只认分片表、直接返回成功，主记录永远重建不出来，
         //    于是 mergeChunk 恒报 MERGE_CHUNK_NOT_FOUND(20006)，怎么传都合并不了。
-        String fileMd5 = aiCustomerServiceFileStorageDO.getFileMd5();
-        fileChunkInfoMapper.deleteByMd5(fileMd5);
+        String fileMd5 = aiKnowledgeBaseFileStorageDO.getFileMd5();
+        knowledgeBaseChunkMapper.deleteByMd5(fileMd5);
 
         // 分片目录由 chunk-path + fileMd5 推导（与 uploadChunk / mergeChunk 的拼法保持一致）
         File chunkDirFile = Paths.get(chunkPath, fileMd5).toAbsolutePath().normalize().toFile();
@@ -160,10 +160,10 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // 执行分页查询
-        Page<AiCustomerServiceFileStorageDO> mdStorageDOPage = aiCustomerServiceFileStorageMapper
+        Page<KnowledgeBaseFileDO> mdStorageDOPage = aiKnowledgeBaseFileStorageMapper
                 .selectPageList(current, size, fileName, startDate, endDate);
 
-        List<AiCustomerServiceFileStorageDO> mdStorageDOS = mdStorageDOPage.getRecords();
+        List<KnowledgeBaseFileDO> mdStorageDOS = mdStorageDOPage.getRecords();
         // DO 转 VO
         List<FindMarkdownFilePageListRspVO> vos = null;
         if (CollUtil.isNotEmpty(mdStorageDOS)) {
@@ -198,7 +198,7 @@ public class CustomerServiceImpl implements CustomerService {
 
         // 先查记录：改备注同样只有上传者本人有权。
         // 原来直接 updateById 再看影响行数，拿不到 uploader_id，无法做归属判断。
-        AiCustomerServiceFileStorageDO record = aiCustomerServiceFileStorageMapper.selectById(id);
+        KnowledgeBaseFileDO record = aiKnowledgeBaseFileStorageMapper.selectById(id);
 
         if (Objects.isNull(record)) {
             throw new BizException(ResponseCodeEnum.MARKDOWN_FILE_NOT_FOUND);
@@ -209,7 +209,7 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // 根据 ID 修改备注信息
-        int count = aiCustomerServiceFileStorageMapper.updateById(AiCustomerServiceFileStorageDO.builder()
+        int count = aiKnowledgeBaseFileStorageMapper.updateById(KnowledgeBaseFileDO.builder()
                         .id(id)
                         .remark(remark)
                         .updateTime(LocalDateTime.now())
@@ -233,7 +233,7 @@ public class CustomerServiceImpl implements CustomerService {
     public Response<CheckFileRspVO> checkFile(CheckFileReqVO checkFileReqVO) {
         String fileMd5 = checkFileReqVO.getFileMd5();
         // 查询对应 MD5 值的文件记录是否已经存在
-        AiCustomerServiceFileStorageDO fileStorageDO = aiCustomerServiceFileStorageMapper
+        KnowledgeBaseFileDO fileStorageDO = aiKnowledgeBaseFileStorageMapper
                 .selectByMd5(fileMd5);
 
         // 文件记录不存在，需要上传
@@ -246,11 +246,11 @@ public class CustomerServiceImpl implements CustomerService {
 
         // 若文件记录已存在
         Integer status = fileStorageDO.getStatus();
-        AiCustomerServiceFileStatusEnum statusEnum = AiCustomerServiceFileStatusEnum.codeOf(status);
+        KnowledgeBaseFileStatusEnum statusEnum = KnowledgeBaseFileStatusEnum.codeOf(status);
 
         // 判断当前处理状态
         // 文件已完整上传，支持秒传
-        if (!Objects.equals(statusEnum, AiCustomerServiceFileStatusEnum.UPLOADING)) {
+        if (!Objects.equals(statusEnum, KnowledgeBaseFileStatusEnum.UPLOADING)) {
             return Response.success(CheckFileRspVO.builder()
                     .exists(true)
                     .needUpload(false)
@@ -258,9 +258,9 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // 文件正在上传中，返回已上传的分片序号
-        List<FileChunkInfoDO> chunks = fileChunkInfoMapper.selecChunkedtList(fileMd5);
+        List<KnowledgeBaseChunkDO> chunks = knowledgeBaseChunkMapper.selecChunkedtList(fileMd5);
         List<Integer> uploadedChunks = chunks.stream()
-                .map(FileChunkInfoDO::getChunkNumber)
+                .map(KnowledgeBaseChunkDO::getChunkNumber)
                 .toList();
 
         return Response.success(CheckFileRspVO.builder()
@@ -284,12 +284,12 @@ public class CustomerServiceImpl implements CustomerService {
         MultipartFile chunk = uploadChunkReqVO.getChunk();
 
         // 快速路径：分片已存在，直接幂等返回（省掉一次磁盘写入）
-        Long count = fileChunkInfoMapper.selectCountByMd5AndChunkNum(fileMd5, chunkNumber);
+        Long count = knowledgeBaseChunkMapper.selectCountByMd5AndChunkNum(fileMd5, chunkNumber);
         if (count > 0) {
             // ⚠️ 光看分片表不够：主记录可能已被删除，而分片是残留（历史脏数据；
             //    正常路径下 deleteMarkdownFile 会连分片一并清理）。
             //    此时若直接返回，主记录永远重建不出来，mergeChunk 恒报 MERGE_CHUNK_NOT_FOUND。
-            if (Objects.nonNull(aiCustomerServiceFileStorageMapper.selectByMd5(fileMd5))) {
+            if (Objects.nonNull(aiKnowledgeBaseFileStorageMapper.selectByMd5(fileMd5))) {
                 log.info("## 分片已存在: fileMd5={}, chunkNumber={}", fileMd5, chunkNumber);
                 return Response.success();
             }
@@ -313,7 +313,7 @@ public class CustomerServiceImpl implements CustomerService {
             FileUtils.forceMkdir(chunkDirFile);
         } catch (IOException e) {
             // 把异常对象一并传给日志，否则堆栈丢失，只剩一行「创建失败」无法定位
-            // （最常见的原因是 customer-service.chunk-path 配了本机不存在的绝对路径）
+            // （最常见的原因是 knowledge-base.chunk-path 配了本机不存在的绝对路径）
             log.error("## 创建分片目录失败: {}", chunkDir, e);
             throw new BizException(ResponseCodeEnum.STORAGE_DIR_UNAVAILABLE);
         }
@@ -330,10 +330,10 @@ public class CustomerServiceImpl implements CustomerService {
 
         // 保存分片记录。
         // 上面的 selectCount 与这里的写入之间仍存在竞态窗口（前端是 3 路并发上传），
-        // 所以走 ON CONFLICT DO NOTHING，由唯一索引 uk_file_chunk_md5_number 做最终裁决。
+        // 所以走 ON CONFLICT DO NOTHING，由唯一索引 uk_kb_chunk_md5_number 做最终裁决。
         // 注意不能改成「捕获 DuplicateKeyException」：PostgreSQL 中约束冲突会让整个事务
         // 进入 aborted 状态，后续语句全部失败，而本方法是 @Transactional 的，catch 也救不回来。
-        int chunkInserted = fileChunkInfoMapper.insertChunkIgnoreDuplicate(FileChunkInfoDO.builder()
+        int chunkInserted = knowledgeBaseChunkMapper.insertChunkIgnoreDuplicate(KnowledgeBaseChunkDO.builder()
                 .fileMd5(fileMd5)
                 .chunkNumber(chunkNumber)
                 .chunkName(chunkFileName) // 只存文件名，所在目录由 chunk-path + fileMd5 推导
@@ -350,14 +350,14 @@ public class CustomerServiceImpl implements CustomerService {
         // 写入文件主记录。首次上传时，并发的多个分片请求都会走到这里，
         // 同样靠 ON CONFLICT 兜底：只有第一个真正创建记录，其余什么都不做。
         LocalDateTime now = LocalDateTime.now();
-        int fileInserted = aiCustomerServiceFileStorageMapper.insertFileIgnoreDuplicate(
-                AiCustomerServiceFileStorageDO.builder()
+        int fileInserted = aiKnowledgeBaseFileStorageMapper.insertFileIgnoreDuplicate(
+                KnowledgeBaseFileDO.builder()
                         .fileMd5(fileMd5)
                         .fileName(uploadChunkReqVO.getFileName())
                         .fileSize(uploadChunkReqVO.getFileSize()) // 原始文件大小
                         .totalChunks(uploadChunkReqVO.getTotalChunks())
                         .uploadedChunks(1) // 本次创建，当前分片已计入，故初始为 1
-                        .status(AiCustomerServiceFileStatusEnum.UPLOADING.getCode()) // 状态：上传中...
+                        .status(KnowledgeBaseFileStatusEnum.UPLOADING.getCode()) // 状态：上传中...
                         .uploaderId(AuthContext.getCurrentUserId()) // 上传者，删改权限依据
                         .storedFileName(Strings.EMPTY) // 尚未合并，还没有落盘文件
                         .createTime(now)
@@ -365,12 +365,12 @@ public class CustomerServiceImpl implements CustomerService {
                         .build());
 
         // 取回主记录（无论是本次创建的，还是并发请求先创建的），拿主键 ID 与总分片数
-        AiCustomerServiceFileStorageDO fileStorageDO = aiCustomerServiceFileStorageMapper.selectByMd5(fileMd5);
+        KnowledgeBaseFileDO fileStorageDO = aiKnowledgeBaseFileStorageMapper.selectByMd5(fileMd5);
 
         // 主记录不是本次创建的，说明是并发的其他分片请求先建的，
         // 它当时只把自己那一片计了数，所以当前分片要单独补上
         if (fileInserted == 0 && Objects.nonNull(fileStorageDO)) {
-            aiCustomerServiceFileStorageMapper.incrementUploadedChunks(fileStorageDO.getId());
+            aiKnowledgeBaseFileStorageMapper.incrementUploadedChunks(fileStorageDO.getId());
         }
 
         log.info("## 分片上传成功: fileMd5={}, chunkNumber={}, totalChunks={}",
@@ -394,17 +394,17 @@ public class CustomerServiceImpl implements CustomerService {
      * @param reqVO   本次上传请求，提供文件名、文件大小与总分片数
      */
     private void restoreFileStorage(String fileMd5, UploadChunkReqVO reqVO) {
-        int uploadedChunks = fileChunkInfoMapper.selecChunkedtList(fileMd5).size();
+        int uploadedChunks = knowledgeBaseChunkMapper.selecChunkedtList(fileMd5).size();
         LocalDateTime now = LocalDateTime.now();
 
-        aiCustomerServiceFileStorageMapper.insertFileIgnoreDuplicate(
-                AiCustomerServiceFileStorageDO.builder()
+        aiKnowledgeBaseFileStorageMapper.insertFileIgnoreDuplicate(
+                KnowledgeBaseFileDO.builder()
                         .fileMd5(fileMd5)
                         .fileName(reqVO.getFileName())
                         .fileSize(reqVO.getFileSize())
                         .totalChunks(reqVO.getTotalChunks())
                         .uploadedChunks(uploadedChunks) // 已存在的分片数，不是 1
-                        .status(AiCustomerServiceFileStatusEnum.UPLOADING.getCode()) // 仍需继续上传，状态回到上传中
+                        .status(KnowledgeBaseFileStatusEnum.UPLOADING.getCode()) // 仍需继续上传，状态回到上传中
                         .uploaderId(AuthContext.getCurrentUserId()) // 重建时以本次请求者为归属人
                         .storedFileName(Strings.EMPTY)
                         .createTime(now)
@@ -438,7 +438,7 @@ public class CustomerServiceImpl implements CustomerService {
         String fileMd5 = mergeChunkReqVO.getFileMd5();
 
         // 检查文件元记录是否存在
-        AiCustomerServiceFileStorageDO fileStorageDO = aiCustomerServiceFileStorageMapper.selectByMd5(fileMd5);
+        KnowledgeBaseFileDO fileStorageDO = aiKnowledgeBaseFileStorageMapper.selectByMd5(fileMd5);
 
         // 要合并的目标文件不存在
         if (Objects.isNull(fileStorageDO)) {
@@ -446,7 +446,7 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // 查询所有已上传分片
-        List<FileChunkInfoDO> chunks = fileChunkInfoMapper.selecChunkedtList(fileMd5);
+        List<KnowledgeBaseChunkDO> chunks = knowledgeBaseChunkMapper.selecChunkedtList(fileMd5);
 
         // 若已上传分片数不等于总分片数，说明分片数不完整
         if (chunks.size() != fileStorageDO.getTotalChunks()) {
@@ -479,7 +479,7 @@ public class CustomerServiceImpl implements CustomerService {
         // 合并分片
         try (FileOutputStream fos = new FileOutputStream(finalFile);
              BufferedOutputStream bos = new BufferedOutputStream(fos)) {
-            for (FileChunkInfoDO chunkInfo : chunks) {
+            for (KnowledgeBaseChunkDO chunkInfo : chunks) {
                 // 读取分片文件
                 File chunkFile = new File(chunkDir, chunkInfo.getChunkName());
                 try (FileInputStream fis = new FileInputStream(chunkFile);
@@ -499,9 +499,9 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         // 更新文件信息
-        aiCustomerServiceFileStorageMapper.updateById(AiCustomerServiceFileStorageDO.builder()
+        aiKnowledgeBaseFileStorageMapper.updateById(KnowledgeBaseFileDO.builder()
                 .id(fileStorageDO.getId())
-                .status(AiCustomerServiceFileStatusEnum.PENDING.getCode()) // 合并完成，等待向量化
+                .status(KnowledgeBaseFileStatusEnum.PENDING.getCode()) // 合并完成，等待向量化
                 .storedFileName(finalFileName) // 只存文件名，目录由 file-storage-path 推导
                 .build());
 
@@ -515,7 +515,7 @@ public class CustomerServiceImpl implements CustomerService {
             throw new BizException(ResponseCodeEnum.FILE_MERGE_FAILED);
         }
 
-        fileChunkInfoMapper.deleteByMd5(fileMd5);
+        knowledgeBaseChunkMapper.deleteByMd5(fileMd5);
 
         log.info("## 文件合并成功: fileMd5={}, filePath={}", fileMd5, finalFile.getAbsolutePath());
 
@@ -529,7 +529,7 @@ public class CustomerServiceImpl implements CustomerService {
         metadatas.put("originalFileName", fileStorageDO.getFileName()); // 文件原始名称
 
         // 发布事件
-        eventPublisher.publishEvent(AiCustomerServiceMdUploadedEvent.builder()
+        eventPublisher.publishEvent(KnowledgeBaseFileUploadedEvent.builder()
                 .id(id)
                 .filePath(finalFile.getAbsolutePath())
                 .metadatas(metadatas)

@@ -30,7 +30,7 @@ yarn-error.log*
 Thumbs.db
 
 # ---------- 运行时数据 ----------
-# 知识库文件与上传分片的落盘位置（customer-service.file-storage-path / chunk-path）
+# 知识库文件与上传分片的落盘位置（knowledge-base.file-storage-path / chunk-path）
 data/
 
 # ---------- 内部工作文档（不进入公开仓库）----------

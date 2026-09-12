@@ -1,4 +1,4 @@
-package io.github.renhaowan.docqa.model.vo.customerService;
+package io.github.renhaowan.docqa.model.vo.knowledgeBase;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

@@ -11,16 +11,16 @@ import java.util.Map;
  * @Author: Renhao-Wan
  * @Date: 2025/11/2 22:31
  * @Version: v1.0.0
- * @Description: AI 客服 Markdown 问答文件上传事件
+ * @Description: 企业知识库 Markdown 问答文件上传事件
  **/
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class AiCustomerServiceMdUploadedEvent {
+public class KnowledgeBaseFileUploadedEvent {
 
     /**
-     * t_ai_customer_service_md_storage 表记录主键 ID
+     * t_knowledge_base_file 表记录主键 ID
      */
     private Long id;
 

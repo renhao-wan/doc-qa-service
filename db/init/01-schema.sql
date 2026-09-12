@@ -27,7 +27,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- ------------------------------------------------------------
 -- 用户表
 --
--- 放在所有业务表之前：t_chat.user_id 与 t_ai_customer_service_file_storage.uploader_id
+-- 放在所有业务表之前：t_chat.user_id 与 t_knowledge_base_file.uploader_id
 -- 逻辑上指向 t_user.id（本项目与其他表一致，不建外键，关联由应用层维护）。
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS t_user
@@ -116,7 +116,7 @@ COMMENT ON COLUMN t_chat_message.role IS '消息角色：user / assistant';
 -- ------------------------------------------------------------
 -- 知识库文件表
 -- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS t_ai_customer_service_file_storage
+CREATE TABLE IF NOT EXISTS t_knowledge_base_file
 (
     id               BIGSERIAL    PRIMARY KEY,
     file_md5         VARCHAR(64)  NOT NULL,
@@ -130,27 +130,27 @@ CREATE TABLE IF NOT EXISTS t_ai_customer_service_file_storage
     remark           VARCHAR(512),
     create_time      TIMESTAMP    NOT NULL DEFAULT now(),
     update_time      TIMESTAMP    NOT NULL DEFAULT now(),
-    CONSTRAINT ck_file_storage_status CHECK (status BETWEEN 0 AND 4),
-    CONSTRAINT ck_file_storage_chunks CHECK (total_chunks > 0 AND uploaded_chunks >= 0)
+    CONSTRAINT ck_kb_file_status CHECK (status BETWEEN 0 AND 4),
+    CONSTRAINT ck_kb_file_chunks CHECK (total_chunks > 0 AND uploaded_chunks >= 0)
 );
 
 -- 秒传与断点续传都依赖按 MD5 定位文件记录。
 -- file_md5 是事实上的业务主键，必须 NOT NULL：PostgreSQL 的唯一索引不约束 NULL，
 -- 允许 NULL 的话可以插入任意多行 file_md5 为 NULL 的记录，
 -- 且 INSERT ... ON CONFLICT (file_md5) 的幂等语义也会失效。
-CREATE UNIQUE INDEX IF NOT EXISTS uk_file_storage_md5 ON t_ai_customer_service_file_storage (file_md5);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_kb_file_md5 ON t_knowledge_base_file (file_md5);
 
-COMMENT ON TABLE t_ai_customer_service_file_storage IS '知识库文件存储记录';
-COMMENT ON COLUMN t_ai_customer_service_file_storage.file_md5 IS '文件 MD5，用于秒传与断点续传';
-COMMENT ON COLUMN t_ai_customer_service_file_storage.stored_file_name IS '合并后实际落盘的文件名（{时间戳}_{原始文件名}）。只存文件名不存绝对路径：目录由 customer-service.file-storage-path 推导，换机器或挪目录后记录依然有效。上传中（status=0）为空串';
-COMMENT ON COLUMN t_ai_customer_service_file_storage.status IS '处理状态：0 上传中 / 1 待向量化 / 2 向量化中 / 3 已完成 / 4 失败';
-COMMENT ON COLUMN t_ai_customer_service_file_storage.uploaded_chunks IS '已上传分片数。刻意冗余（可由 t_file_chunk_info 统计得出），用一次原子自增换掉高频 count(*)';
-COMMENT ON COLUMN t_ai_customer_service_file_storage.uploader_id IS '上传者用户 ID。文件全局共享可见，但只有上传者本人能删除与改备注';
+COMMENT ON TABLE t_knowledge_base_file IS '知识库文件存储记录';
+COMMENT ON COLUMN t_knowledge_base_file.file_md5 IS '文件 MD5，用于秒传与断点续传';
+COMMENT ON COLUMN t_knowledge_base_file.stored_file_name IS '合并后实际落盘的文件名（{时间戳}_{原始文件名}）。只存文件名不存绝对路径：目录由 knowledge-base.file-storage-path 推导，换机器或挪目录后记录依然有效。上传中（status=0）为空串';
+COMMENT ON COLUMN t_knowledge_base_file.status IS '处理状态：0 上传中 / 1 待向量化 / 2 向量化中 / 3 已完成 / 4 失败';
+COMMENT ON COLUMN t_knowledge_base_file.uploaded_chunks IS '已上传分片数。刻意冗余（可由 t_knowledge_base_chunk 统计得出），用一次原子自增换掉高频 count(*)';
+COMMENT ON COLUMN t_knowledge_base_file.uploader_id IS '上传者用户 ID。文件全局共享可见，但只有上传者本人能删除与改备注';
 
 -- ------------------------------------------------------------
 -- 分片信息表
 -- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS t_file_chunk_info
+CREATE TABLE IF NOT EXISTS t_knowledge_base_chunk
 (
     id           BIGSERIAL   PRIMARY KEY,
     file_md5     VARCHAR(64) NOT NULL,
@@ -158,20 +158,20 @@ CREATE TABLE IF NOT EXISTS t_file_chunk_info
     chunk_name   VARCHAR(64) NOT NULL,
     chunk_size   BIGINT      NOT NULL DEFAULT 0,
     create_time  TIMESTAMP NOT NULL DEFAULT now(),
-    CONSTRAINT ck_file_chunk_number CHECK (chunk_number >= 0)
+    CONSTRAINT ck_kb_chunk_number CHECK (chunk_number >= 0)
 );
 
 -- 唯一约束是分片重复上传的最终防线：
 -- 前端并发上传，应用层的「先查再插」存在竞态，靠这个索引兜底。
 -- 代码侧配合 INSERT ... ON CONFLICT (file_md5, chunk_number) DO NOTHING 实现幂等
--- （见 FileChunkInfoMapper.insertChunkIgnoreDuplicate）。
+-- （见 KnowledgeBaseChunkMapper.insertChunkIgnoreDuplicate）。
 -- ⚠️ 不能改成「插入后捕获 DuplicateKeyException」：PostgreSQL 中一旦违反约束，
 -- 整个事务立即进入 aborted 状态，而 uploadChunk 是 @Transactional 的，方法内 catch 救不回来。
-CREATE UNIQUE INDEX IF NOT EXISTS uk_file_chunk_md5_number ON t_file_chunk_info (file_md5, chunk_number);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_kb_chunk_md5_number ON t_knowledge_base_chunk (file_md5, chunk_number);
 
-COMMENT ON TABLE t_file_chunk_info IS '上传分片信息';
-COMMENT ON COLUMN t_file_chunk_info.chunk_number IS '分片序号，从 0 开始';
-COMMENT ON COLUMN t_file_chunk_info.chunk_name IS '分片文件名（如 0.chunk）。刻意只存文件名不存绝对路径：所在目录可由 chunk-path 配置 + file_md5 推导，换机器或挪目录后记录依然有效';
+COMMENT ON TABLE t_knowledge_base_chunk IS '上传分片信息';
+COMMENT ON COLUMN t_knowledge_base_chunk.chunk_number IS '分片序号，从 0 开始';
+COMMENT ON COLUMN t_knowledge_base_chunk.chunk_name IS '分片文件名（如 0.chunk）。刻意只存文件名不存绝对路径：所在目录可由 chunk-path 配置 + file_md5 推导，换机器或挪目录后记录依然有效';
 
 -- ------------------------------------------------------------
 -- 向量表 t_vector_store 刻意不在此创建

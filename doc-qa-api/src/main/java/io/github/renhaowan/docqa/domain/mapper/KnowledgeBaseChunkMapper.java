@@ -2,7 +2,7 @@ package io.github.renhaowan.docqa.domain.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import io.github.renhaowan.docqa.domain.dos.FileChunkInfoDO;
+import io.github.renhaowan.docqa.domain.dos.KnowledgeBaseChunkDO;
 import org.apache.ibatis.annotations.Insert;
 
 import java.util.List;
@@ -13,18 +13,18 @@ import java.util.List;
  * @Version: v1.0.0
  * @Description: 分片信息表
  **/
-public interface FileChunkInfoMapper extends BaseMapper<FileChunkInfoDO> {
+public interface KnowledgeBaseChunkMapper extends BaseMapper<KnowledgeBaseChunkDO> {
 
     /**
      * 根据文件 MD5 值查询所有已上传的分片
      * @param fileMd5
      * @return
      */
-    default List<FileChunkInfoDO> selecChunkedtList(String fileMd5) {
+    default List<KnowledgeBaseChunkDO> selecChunkedtList(String fileMd5) {
         return selectList(
-                Wrappers.<FileChunkInfoDO>lambdaQuery()
-                        .eq(FileChunkInfoDO::getFileMd5, fileMd5)
-                        .orderByAsc(FileChunkInfoDO::getChunkNumber)
+                Wrappers.<KnowledgeBaseChunkDO>lambdaQuery()
+                        .eq(KnowledgeBaseChunkDO::getFileMd5, fileMd5)
+                        .orderByAsc(KnowledgeBaseChunkDO::getChunkNumber)
         );
     }
 
@@ -36,9 +36,9 @@ public interface FileChunkInfoMapper extends BaseMapper<FileChunkInfoDO> {
      */
     default Long selectCountByMd5AndChunkNum(String fileMd5, Integer chunkNum) {
         return selectCount(
-                Wrappers.<FileChunkInfoDO>lambdaQuery()
-                        .eq(FileChunkInfoDO::getFileMd5, fileMd5)
-                        .eq(FileChunkInfoDO::getChunkNumber, chunkNum)
+                Wrappers.<KnowledgeBaseChunkDO>lambdaQuery()
+                        .eq(KnowledgeBaseChunkDO::getFileMd5, fileMd5)
+                        .eq(KnowledgeBaseChunkDO::getChunkNumber, chunkNum)
         );
     }
 
@@ -51,18 +51,18 @@ public interface FileChunkInfoMapper extends BaseMapper<FileChunkInfoDO> {
      * 为什么不是「insert 后捕获 DuplicateKeyException」：PostgreSQL 中语句一旦违反约束，
      * 整个事务立即进入 aborted 状态，后续任何语句都会报
      * "current transaction is aborted, commands ignored until end of transaction block"。
-     * 而 {@code CustomerServiceImpl#uploadChunk} 是 {@code @Transactional} 的，
+     * 而 {@code KnowledgeBaseServiceImpl#uploadChunk} 是 {@code @Transactional} 的，
      * 在方法内部 catch 住异常也无法让事务复活。用 ON CONFLICT 从根上不产生异常。
      *
      * @param chunkInfo 分片记录
      * @return 影响行数：1 = 确实是新分片，0 = 该分片已存在（并发重复提交）
      */
     @Insert("""
-            INSERT INTO t_file_chunk_info (file_md5, chunk_number, chunk_name, chunk_size, create_time)
+            INSERT INTO t_knowledge_base_chunk (file_md5, chunk_number, chunk_name, chunk_size, create_time)
             VALUES (#{fileMd5}, #{chunkNumber}, #{chunkName}, #{chunkSize}, #{createTime})
             ON CONFLICT (file_md5, chunk_number) DO NOTHING
             """)
-    int insertChunkIgnoreDuplicate(FileChunkInfoDO chunkInfo);
+    int insertChunkIgnoreDuplicate(KnowledgeBaseChunkDO chunkInfo);
 
     /**
      * 根据文件 MD5 删除记录
@@ -70,8 +70,8 @@ public interface FileChunkInfoMapper extends BaseMapper<FileChunkInfoDO> {
      * @return
      */
     default int deleteByMd5(String fileMd5) {
-        return delete(Wrappers.<FileChunkInfoDO>lambdaQuery()
-                .eq(FileChunkInfoDO::getFileMd5, fileMd5));
+        return delete(Wrappers.<KnowledgeBaseChunkDO>lambdaQuery()
+                .eq(KnowledgeBaseChunkDO::getFileMd5, fileMd5));
     }
 
 

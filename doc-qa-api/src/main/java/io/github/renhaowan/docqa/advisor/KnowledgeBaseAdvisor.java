@@ -20,10 +20,10 @@ import java.util.Map;
  * @Author: Renhao-Wan
  * @Date: 2025/8/5 13:40
  * @Version: v1.0.0
- * @Description: 智能客服 Advisor
+ * @Description: 知识库 Advisor
  **/
 @Slf4j
-public class CustomerServiceAdvisor implements StreamAdvisor {
+public class KnowledgeBaseAdvisor implements StreamAdvisor {
 
     private final VectorStore vectorStore;
 
@@ -31,7 +31,7 @@ public class CustomerServiceAdvisor implements StreamAdvisor {
      * 联网搜索提示词模板
      */
     private static final PromptTemplate DEFAULT_PROMPT_TEMPLATE = new PromptTemplate("""
-            你是一个专业的客服，名为 “Doc QA”。请根据以下上下文信息回答用户问题。
+            你是企业内部知识库助手，名为 “Doc QA”。请根据以下上下文信息回答用户问题。
             
             ## 上下文信息
             {context}
@@ -63,7 +63,7 @@ public class CustomerServiceAdvisor implements StreamAdvisor {
             现在请根据以上要求回答问题。
             """);
 
-    public CustomerServiceAdvisor(VectorStore vectorStore) {
+    public KnowledgeBaseAdvisor(VectorStore vectorStore) {
         this.vectorStore = vectorStore;
     }
 

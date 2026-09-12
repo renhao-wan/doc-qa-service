@@ -1,10 +1,10 @@
 package io.github.renhaowan.docqa;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.renhaowan.docqa.domain.dos.AiCustomerServiceFileStorageDO;
-import io.github.renhaowan.docqa.domain.mapper.AiCustomerServiceFileStorageMapper;
+import io.github.renhaowan.docqa.domain.dos.KnowledgeBaseFileDO;
+import io.github.renhaowan.docqa.domain.mapper.KnowledgeBaseFileMapper;
 import io.github.renhaowan.docqa.domain.mapper.UserMapper;
-import io.github.renhaowan.docqa.enums.AiCustomerServiceFileStatusEnum;
+import io.github.renhaowan.docqa.enums.KnowledgeBaseFileStatusEnum;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -38,7 +38,7 @@ class MarkdownFilePermissionTests {
     @Autowired
     private ObjectMapper objectMapper;
     @Autowired
-    private AiCustomerServiceFileStorageMapper fileStorageMapper;
+    private KnowledgeBaseFileMapper fileStorageMapper;
     @Autowired
     private UserMapper userMapper;
 
@@ -46,7 +46,7 @@ class MarkdownFilePermissionTests {
     void testDeleteOthersFileRejected() throws Exception {
         Long id = insertCompletedFile("demo");
 
-        mockMvc.perform(post("/customer-service/md/delete")
+        mockMvc.perform(post("/knowledge-base/md/delete")
                         .header("Authorization", "Bearer " + login("demo2", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"id\":" + id + "}"))
@@ -60,7 +60,7 @@ class MarkdownFilePermissionTests {
     void testUpdateOthersFileRejected() throws Exception {
         Long id = insertCompletedFile("demo");
 
-        mockMvc.perform(post("/customer-service/md/update")
+        mockMvc.perform(post("/knowledge-base/md/update")
                         .header("Authorization", "Bearer " + login("demo2", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"id\":" + id + ",\"remark\":\"被改掉的备注\"}"))
@@ -73,7 +73,7 @@ class MarkdownFilePermissionTests {
         insertCompletedFile("demo");
 
         // 知识库是共享可见的：demo2 能看到 demo 上传的文件
-        mockMvc.perform(post("/customer-service/md/list")
+        mockMvc.perform(post("/knowledge-base/md/list")
                         .header("Authorization", "Bearer " + login("demo2", "demo123"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"current\":1,\"size\":10}"))
@@ -96,14 +96,14 @@ class MarkdownFilePermissionTests {
         Long uploaderId = userMapper.selectByUsername(uploaderUsername).getId();
         LocalDateTime now = LocalDateTime.now();
 
-        AiCustomerServiceFileStorageDO record = AiCustomerServiceFileStorageDO.builder()
+        KnowledgeBaseFileDO record = KnowledgeBaseFileDO.builder()
                 .fileMd5(UUID.randomUUID().toString().replace("-", ""))
                 .fileName("测试文档.md")
                 .storedFileName(System.currentTimeMillis() + "_测试文档.md")
                 .fileSize(1024L)
                 .totalChunks(1)
                 .uploadedChunks(1)
-                .status(AiCustomerServiceFileStatusEnum.COMPLETED.getCode())
+                .status(KnowledgeBaseFileStatusEnum.COMPLETED.getCode())
                 .uploaderId(uploaderId)
                 .createTime(now)
                 .updateTime(now)

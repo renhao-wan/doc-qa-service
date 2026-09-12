@@ -1,7 +1,7 @@
 package io.github.renhaowan.docqa.service;
 
 
-import io.github.renhaowan.docqa.model.vo.customerService.*;
+import io.github.renhaowan.docqa.model.vo.knowledgeBase.*;
 import io.github.renhaowan.docqa.utils.PageResponse;
 import io.github.renhaowan.docqa.utils.Response;
 
@@ -9,9 +9,9 @@ import io.github.renhaowan.docqa.utils.Response;
  * @author: Renhao-Wan
  * @url: https://github.com/Renhao-Wan
  * @date: 2023-09-15 14:03
- * @description: AI 客服
+ * @description: 企业知识库
  **/
-public interface CustomerService {
+public interface KnowledgeBaseService {
 
 //    /**
 //     * 上传 Markdown 问答文件

@@ -61,7 +61,7 @@
               <!-- 头像 -->
               <div class="flex-shrink-0 mr-3">
                 <div class="w-8 h-8 rounded-full flex items-center justify-center border border-gray-200">
-                  <SvgIcon name="customer-service-logo" customCss="w-5 h-5"></SvgIcon>
+                  <SvgIcon name="knowledge-base-logo" customCss="w-5 h-5"></SvgIcon>
                 </div>
               </div>
               <!-- 回复的内容 -->
@@ -78,8 +78,8 @@
           @sendMessage="sendMessage" placeholder="向 Doc QA 询问" :showModelDropdown="false" :showNetworkSearch="false"/>
       </div>
 
-      <!-- 抽屉：客服问答文件管理 -->
-      <a-drawer width="80%" title="客服问答文件管理" placement="right" :open="settingsDrawerOpen" @close="onSettingsDrawerClose">
+      <!-- 抽屉：知识库问答文件管理 -->
+      <a-drawer width="80%" title="知识库问答文件管理" placement="right" :open="settingsDrawerOpen" @close="onSettingsDrawerClose">
           <!-- 搜索区域 -->
           <div class="mb-5">
             <a-form
@@ -260,7 +260,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { useAuthStore } from '@/stores/authStore'
 import { UploadOutlined, SearchOutlined, RedoOutlined, LogoutOutlined } from '@ant-design/icons-vue'
-import { findMarkdownFilePageList, deleteMarkdownFile, updateMarkdownFile, uploadFileChunk, mergeFileChunk, checkFile } from '@/api/customerService'
+import { findMarkdownFilePageList, deleteMarkdownFile, updateMarkdownFile, uploadFileChunk, mergeFileChunk, checkFile } from '@/api/knowledgeBase'
 import { message } from 'ant-design-vue'
 import { filesize } from 'filesize'
 import SparkMD5 from 'spark-md5'
@@ -290,7 +290,7 @@ const chatMessage = ref(history.state?.firstMessage || '')
 const chatContainer = ref(null)
 
 // 聊天记录，默认给一个欢迎语
-const chatList = ref([{ role: 'assistant', content: '你好呀！我是 Doc QA 智能客服，基于 Spring AI 开发，欢迎向我咨询文档相关问题 😁', loading: false }])
+const chatList = ref([{ role: 'assistant', content: '你好呀！我是 Doc QA 知识库，基于 Spring AI 开发，欢迎向我咨询文档相关问题 😁', loading: false }])
 
 // 对话 ID
 const chatId = ref(null)
@@ -326,7 +326,7 @@ const sendMessage = async () => {
     const signal = controller.signal
 
     // 走 Vite proxy 的相对路径，理由同 ChatPage：跨域 + Authorization 会触发预检
-    fetchEventSource('/api/customer-service/completion', {
+    fetchEventSource('/api/knowledge-base/completion', {
       method: 'POST',
       signal: signal,
       headers: {

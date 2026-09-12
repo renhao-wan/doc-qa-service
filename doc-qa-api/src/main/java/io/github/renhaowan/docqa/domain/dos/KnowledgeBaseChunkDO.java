@@ -20,8 +20,8 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("t_file_chunk_info")
-public class FileChunkInfoDO {
+@TableName("t_knowledge_base_chunk")
+public class KnowledgeBaseChunkDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;

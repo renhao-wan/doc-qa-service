@@ -19,9 +19,9 @@
 
       <!-- 其他工具入口 -->
       <ul class="px-3 text-gray-600 mb-2">
-        <li class="flex items-center py-1 px-2 hover:bg-gray-100 rounded-lg cursor-pointer" @click="jumpToCustomerServiceChatPage">
-          <SvgIcon name="customer-service" customCss="w-5 h-5 mr-2 inline mb-0" />
-          <span>智能客服</span>
+        <li class="flex items-center py-1 px-2 hover:bg-gray-100 rounded-lg cursor-pointer" @click="jumpToKnowledgeBaseChatPage">
+          <SvgIcon name="knowledge-base" customCss="w-5 h-5 mr-2 inline mb-0" />
+          <span>知识库</span>
         </li>
       </ul>
 
@@ -185,9 +185,9 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-// 跳转智能客服聊天页
-const jumpToCustomerServiceChatPage = () => {
-  router.push({ name: 'CustomerServiceChatPage'})
+// 跳转知识库聊天页
+const jumpToKnowledgeBaseChatPage = () => {
+  router.push({ name: 'KnowledgeBaseChatPage'})
 }
 
 // 左边栏滚动区域引用

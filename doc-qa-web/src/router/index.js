@@ -29,11 +29,11 @@ const routes = [
         }
     },
     {
-        path: '/customer-service/chat', // 路由地址
-        name: 'CustomerServiceChatPage', // 命名路由
-        component: () => import('@/views/CustomerServiceChatPage.vue'), // 对应组件
+        path: '/knowledge-base/chat', // 路由地址
+        name: 'KnowledgeBaseChatPage', // 命名路由
+        component: () => import('@/views/KnowledgeBaseChatPage.vue'), // 对应组件
         meta: { // meta 信息
-            title: '智能客服聊天页' // 页面标题
+            title: '知识库聊天页' // 页面标题
         }
     }
 ]

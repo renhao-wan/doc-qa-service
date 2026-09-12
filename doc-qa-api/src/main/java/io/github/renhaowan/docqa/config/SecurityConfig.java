@@ -57,7 +57,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 // ⚠️ 暂时不要加 CORS 配置，但原因不是「前端本来就同源」——那只是 axios 那条路径的现状。
                 //    Vite proxy 只覆盖走 axios 的接口；两个 SSE 接口在前端是**硬编码跨源直连**
-                //    http://localhost:8080（ChatPage.vue、CustomerServiceChatPage.vue），
+                //    http://localhost:8080（ChatPage.vue、KnowledgeBaseChatPage.vue），
                 //    改走 proxy 是 Task 8 的事。在那之前给它们加上 Authorization: Bearer，
                 //    浏览器就会先发 OPTIONS 预检，而预检请求不携带 Authorization，
                 //    于是落到下面的 anyRequest().authenticated() 上被回 30001。

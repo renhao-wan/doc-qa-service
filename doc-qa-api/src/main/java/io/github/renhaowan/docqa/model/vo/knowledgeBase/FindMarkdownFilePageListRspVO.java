@@ -1,4 +1,4 @@
-package io.github.renhaowan.docqa.model.vo.customerService;
+package io.github.renhaowan.docqa.model.vo.knowledgeBase;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

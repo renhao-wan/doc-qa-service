@@ -1,9 +1,9 @@
 package io.github.renhaowan.docqa.event.listener;
 
-import io.github.renhaowan.docqa.domain.dos.AiCustomerServiceFileStorageDO;
-import io.github.renhaowan.docqa.domain.mapper.AiCustomerServiceFileStorageMapper;
-import io.github.renhaowan.docqa.enums.AiCustomerServiceFileStatusEnum;
-import io.github.renhaowan.docqa.event.AiCustomerServiceMdUploadedEvent;
+import io.github.renhaowan.docqa.domain.dos.KnowledgeBaseFileDO;
+import io.github.renhaowan.docqa.domain.mapper.KnowledgeBaseFileMapper;
+import io.github.renhaowan.docqa.enums.KnowledgeBaseFileStatusEnum;
+import io.github.renhaowan.docqa.event.KnowledgeBaseFileUploadedEvent;
 import io.github.renhaowan.docqa.reader.MarkdownReader;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -29,14 +29,14 @@ import java.util.Map;
  **/
 @Component
 @Slf4j
-public class AiCustomerServiceMdUploadedListener {
+public class KnowledgeBaseFileUploadedListener {
 
     @Resource
     private MarkdownReader markdownReader;
     @Resource
     private VectorStore vectorStore;
     @Resource
-    private AiCustomerServiceFileStorageMapper aiCustomerServiceFileStorageMapper;
+    private KnowledgeBaseFileMapper aiKnowledgeBaseFileStorageMapper;
     @Resource
     private TransactionTemplate transactionTemplate;
 
@@ -44,7 +44,7 @@ public class AiCustomerServiceMdUploadedListener {
      * Markdown 文件向量化
      * <p>
      * 用 {@link TransactionalEventListener} 而不是普通的 {@code @EventListener}：
-     * 事件是在 {@code CustomerServiceImpl#mergeChunk} 的事务里发布的，而 {@code @EventListener}
+     * 事件是在 {@code KnowledgeBaseServiceImpl#mergeChunk} 的事务里发布的，而 {@code @EventListener}
      * 不感知事务边界，{@code @Async} 也只是把它丢到别的线程，事件可能在事务提交前就被处理，
      * 此时监听器读库会读到旧数据（乃至读不到刚写入的记录）。
      * 指定 {@code AFTER_COMMIT} 后，监听器只在事务成功提交后才被触发。
@@ -57,8 +57,8 @@ public class AiCustomerServiceMdUploadedListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     @Async("eventTaskExecutor") // 指定使用我们自定义的线程池
-    public void vectorizing(AiCustomerServiceMdUploadedEvent event) {
-        log.info("## AiCustomerServiceMdUploadedEvent: {}", event);
+    public void vectorizing(KnowledgeBaseFileUploadedEvent event) {
+        log.info("## KnowledgeBaseFileUploadedEvent: {}", event);
 
         // 文件存储表主键 ID
         Long id =  event.getId();
@@ -68,9 +68,9 @@ public class AiCustomerServiceMdUploadedListener {
         Map<String, Object> metadatas = event.getMetadatas();
 
         // 更新存储文件的处理状态为 “向量化中”
-        aiCustomerServiceFileStorageMapper.updateById(AiCustomerServiceFileStorageDO.builder()
+        aiKnowledgeBaseFileStorageMapper.updateById(KnowledgeBaseFileDO.builder()
                 .id(id)
-                .status(AiCustomerServiceFileStatusEnum.VECTORIZING.getCode())
+                .status(KnowledgeBaseFileStatusEnum.VECTORIZING.getCode())
                 .updateTime(LocalDateTime.now())
                 .build());
 
@@ -103,9 +103,9 @@ public class AiCustomerServiceMdUploadedListener {
                 }
 
                 // 更新存储文件的处理状态为 “已完成”
-                aiCustomerServiceFileStorageMapper.updateById(AiCustomerServiceFileStorageDO.builder()
+                aiKnowledgeBaseFileStorageMapper.updateById(KnowledgeBaseFileDO.builder()
                         .id(id)
-                        .status(AiCustomerServiceFileStatusEnum.COMPLETED.getCode())
+                        .status(KnowledgeBaseFileStatusEnum.COMPLETED.getCode())
                         .updateTime(LocalDateTime.now())
                         .build());
 
@@ -119,9 +119,9 @@ public class AiCustomerServiceMdUploadedListener {
 
         // 若事务执行失败，更新存储文件的处理状态为 “失败”
         if (!isSuccess) {
-            aiCustomerServiceFileStorageMapper.updateById(AiCustomerServiceFileStorageDO.builder()
+            aiKnowledgeBaseFileStorageMapper.updateById(KnowledgeBaseFileDO.builder()
                     .id(id)
-                    .status(AiCustomerServiceFileStatusEnum.FAILED.getCode())
+                    .status(KnowledgeBaseFileStatusEnum.FAILED.getCode())
                     .updateTime(LocalDateTime.now())
                     .build());
         }
