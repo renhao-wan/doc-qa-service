@@ -28,3 +28,9 @@ yarn-error.log*
 # ---------- 系统 ----------
 .DS_Store
 Thumbs.db
+
+# ---------- 内部工作文档（不进入公开仓库）----------
+# 包含简历包装策略、面试话术、项目缺陷盘点等内容，仅本地使用
+CLAUDE.md
+TODO.md
+OPTIMIZATION-PLAN.md
