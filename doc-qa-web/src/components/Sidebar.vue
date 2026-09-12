@@ -76,6 +76,20 @@
           </div>
         </div>
       </div>
+
+      <!-- 当前用户与退出登录 -->
+      <div class="px-3 py-3 border-t border-gray-200 flex items-center justify-between">
+        <div class="flex items-center text-sm text-gray-600 min-w-0">
+          <SvgIcon name="ai-robot-logo" customCss="w-5 h-5 mr-2 text-gray-400" />
+          <span class="truncate">{{ authStore.nickname || authStore.username }}</span>
+        </div>
+
+        <a-tooltip title="退出登录">
+          <button class="text-gray-400 hover:text-gray-600 cursor-pointer" @click="handleLogout">
+            <LogoutOutlined />
+          </button>
+        </a-tooltip>
+      </div>
     </div>
   </div>
 
@@ -125,14 +139,16 @@
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount, toRaw } from 'vue'
 import SvgIcon from '@/components/SvgIcon.vue'
-import { EditOutlined, EllipsisOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { EditOutlined, EllipsisOutlined, DeleteOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 // 导入获取历史对话列表的API
 import { findHistoryChatPageList, deleteChat, renameChat } from '@/api/chat'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/authStore'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 
 // 定义 props, 对外部暴露配置项
 const props = defineProps({
@@ -159,6 +175,14 @@ const selectedChatId = ref(null)
 // 跳转到首页
 const jumpToIndexPage = () => {
   router.push('/')
+}
+
+// 退出登录：清掉本地登录态即可。
+// 后端是无状态 JWT，签发后在有效期内始终有效——这是选择无状态方案的固有代价，
+// 也是「为什么需要 refresh token / 黑名单」的面试切入点（见 spec §10）。
+const handleLogout = () => {
+  authStore.clear()
+  router.push('/login')
 }
 
 // 跳转智能客服聊天页
