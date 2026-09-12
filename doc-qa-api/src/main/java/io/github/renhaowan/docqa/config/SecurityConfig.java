@@ -77,7 +77,13 @@ public class SecurityConfig {
                 // 关掉默认的 httpBasic 与 formLogin：它们会给未认证请求回一个浏览器登录框
                 // 和 WWW-Authenticate 头，前端拿到的东西与本项目「一律 Response JSON」的约定冲突
                 .httpBasic(AbstractHttpConfigurer::disable)
-                .formLogin(AbstractHttpConfigurer::disable);
+                .formLogin(AbstractHttpConfigurer::disable)
+                // 同样关掉默认的 logout：LogoutFilter 会让 POST /logout 走 Spring Security
+                // 自己的分支，返回 302 + Location: /login?logout，既不是项目的 Response JSON、
+                // 也不是 30001，是「放行清单只有 /auth/login」与「一律返回 Response」的反例。
+                // 无状态 JWT 本来就没有会话可失效，前端退出登录只清本地状态（见 authStore.clear()），
+                // 关掉它之后 POST /logout 会落到认证链上，返回 30001 的 JSON，与其余接口一致。
+                .logout(AbstractHttpConfigurer::disable);
 
         return http.build();
     }

@@ -414,6 +414,20 @@ public class CustomerServiceImpl implements CustomerService {
 
     /**
      * 文件分片合并
+     * <p>
+     * ⚠️ <b>本方法是知识库侧唯一绕过权限模型的路径，且这个缺口尚未修复。</b>
+     * 它<b>不校验 {@code uploader_id}</b>：任何登录用户只要把某个 fileMd5 的分片补齐
+     * （分片接口本身也不校验归属），就能合并出「别人的」文件记录——下面的
+     * {@code updateById} 会覆盖该记录的 {@code stored_file_name} 并把状态改回
+     * {@code PENDING}，随后重新触发向量化。
+     * <p>
+     * 合法续传只发生在记录处于 {@code UPLOADING} 状态时（此时 {@code stored_file_name}
+     * 还是空串，覆盖它没有副作用）。而当目标记录已经 {@code COMPLETED} 时，
+     * 这次覆盖会把别人已经向量化、正在被所有人 RAG 检索到的正文整体替换掉——
+     * 这是该缺口里最有害的一种，因为影响面是全体用户的检索结果，而不只是文件归属人。
+     * <p>
+     * 已知的缓解方向（例如「状态不是 {@code UPLOADING} 时拒绝合并」）属于行为变更
+     * 且会波及合法的重传场景，提交时未采纳。改动本方法前请先确认这一段是否仍然成立。
      *
      * @param mergeChunkReqVO
      * @return
