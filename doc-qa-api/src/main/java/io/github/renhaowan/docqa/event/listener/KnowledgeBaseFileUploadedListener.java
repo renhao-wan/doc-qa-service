@@ -8,7 +8,6 @@ import io.github.renhaowan.docqa.reader.MarkdownReader;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.scheduling.annotation.Async;
@@ -83,23 +82,29 @@ public class KnowledgeBaseFileUploadedListener {
                 // 解析为 Document 集合
                 List<Document> documents = markdownReader.loadMarkdown(resource, metadatas);
 
-                log.info("## documents: {}", documents);
+                log.info("## 文件 {} 解析出 {} 个分片", id, documents.size());
 
-                // 向量化，并存储入库
-                for (Document document : documents) {
-                    // 防止重复添加相同文档到 PGVector 中
-                    // 从向量数据中，查询当前文档
-                    List<Document> results = vectorStore.similaritySearch(SearchRequest.builder()
-                            .query(document.getText())
-                            .topK(1) // 查询一条最高得分的
-                            .build());
+                // 先按归属清掉这个文件已有的向量，再整体写入——即「覆盖式重建」。
+                // ⚠️ 顺序不能反：反了会把刚写入的向量删掉，文件向量化完反而检索不到。
+                //
+                // 为什么按 mdStorageId 删而不是按内容去重：旧实现是逐条 similaritySearch(topK=1)
+                // 比对得分 > 0.99 就跳过，那是**跨文件**去重——同一段文本只归属于第一个上传它的
+                // 文件。而删除走的是 `mdStorageId == id`，于是删掉 A 文件会连带删掉 B 文件里
+                // 那段「被判定为重复」的内容，B 从此检索不到自己的段落。归属错乱是正确性问题，
+                // 不只是性能问题。改成按归属重建后，一个文件的向量就是它当前内容的向量。
+                // ⚠️ 过滤键 mdStorageId 由 KnowledgeBaseServiceImpl#mergeChunk 写入 Documents 的
+                // 元数据，两处必须一致；只改一处会让这句删除静默失效、旧向量永久累积。
+                vectorStore.delete(String.format("mdStorageId == %s", id));
 
-                    // 如果结果不为空，并且得分大于 0.99，则表示文档较高几率重复，直接跳过
-                    if (!results.isEmpty() && results.get(0).getScore() > 0.99)
-                        continue;
-
-                    // 通过向量模型，将文档向量化存储到 PGVector 中
-                    vectorStore.add(List.of(document));
+                // 整体写入。PgVectorStore.doAdd 内部是
+                // EmbeddingModel.embed(List, ..., BatchingStrategy) + JdbcTemplate.batchUpdate，
+                // 一次调用即可完成批量向量化与批量插入；退回逐条 add 会让 embedding 调用
+                // 随分片数线性增长——那是走网络的调用，是这条链路上最贵的一环。
+                //
+                // 空集合不递进去：add(emptyList) 会走到 embed(空) + batchUpdate(空批)，
+                // 这条路径的行为没有保证，不值得依赖
+                if (!documents.isEmpty()) {
+                    vectorStore.add(documents);
                 }
 
                 // 更新存储文件的处理状态为 “已完成”
