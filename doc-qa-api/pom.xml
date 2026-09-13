@@ -16,6 +16,10 @@
     <description>企业私有知识库问答服务</description>
 
     <properties>
+        <!-- 项目版本。上面的 <version> 引用它（Maven CI-Friendly Versions 的写法），
+             属性本身必须有定义，否则版本会被解析成字面量 "null"，
+             打包产物叫 doc-qa-api-null.jar。可在命令行用 -Drevision=x.y.z 覆盖 -->
+        <revision>1.0.0</revision>
         <!-- JDK 版本 -->
         <java.version>17</java.version>
         <!-- Spring AI 版本 -->
