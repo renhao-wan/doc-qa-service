@@ -6,6 +6,7 @@ import io.github.renhaowan.docqa.aspect.ApiOperationLog;
 import io.github.renhaowan.docqa.model.vo.chat.AIResponse;
 import io.github.renhaowan.docqa.model.vo.knowledgeBase.*;
 import io.github.renhaowan.docqa.service.KnowledgeBaseService;
+import io.github.renhaowan.docqa.tool.WebSearchTool;
 import io.github.renhaowan.docqa.utils.PageResponse;
 import io.github.renhaowan.docqa.utils.Response;
 import jakarta.annotation.Resource;
@@ -40,6 +41,8 @@ public class KnowledgeBaseController {
     private KnowledgeBaseService knowledgeBase;
     @Resource
     private VectorStore vectorStore;
+    @Resource
+    private WebSearchTool webSearchTool;
 
     @Value("${spring.ai.openai.base-url}")
     private String baseUrl;
@@ -112,9 +115,22 @@ public class KnowledgeBaseController {
                         .build())
                 .user(userMessage); // 用户提示词
 
+        // 是否开启联网兜底：开启后才把联网搜索工具挂给模型，由模型自主决定是否调用
+        boolean webFallback = Boolean.TRUE.equals(chatReqVO.getNetworkFallback());
+
+        if (webFallback) {
+            // .tools() 与上方 .options(OpenAiChatOptions) 不冲突：前者只往 chatClientRequestSpec
+            // 自己的 toolCallbacks 列表里追加，由 DefaultChatClientUtils 在构建请求时合并进 options；
+            // 而 OpenAiChatOptions 直接实现 ToolCallingChatOptions、不继承 DefaultChatOptions，
+            // 因此 model 与 temperature 不会被复制丢失
+            chatClientRequestSpec.tools(webSearchTool);
+        }
+
         // Advisor 集合
         List<Advisor> advisors = Lists.newArrayList();
-        advisors.add(new KnowledgeBaseAdvisor(vectorStore)); // 检索向量库，组合增强提示词
+        // 检索向量库，组合增强提示词；提示词必须与工具是否挂载保持一致，
+        // 否则模型会在没有工具可用时凭空编造联网结果
+        advisors.add(new KnowledgeBaseAdvisor(vectorStore, webFallback));
 
         // 应用 Advisor 集合
         chatClientRequestSpec.advisors(advisors);

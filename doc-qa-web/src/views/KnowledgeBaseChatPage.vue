@@ -74,8 +74,13 @@
         </div>
 
         <!-- 提问输入框 -->
+        <!-- 本页无模型下拉（模型由后端配置固定），只保留「联网兜底」开关：
+             开启后才把联网搜索工具挂给模型，由模型自主决定是否调用 -->
         <ChatInputBox v-model="chatMessage" containerClass="sticky max-w-3xl mx-auto bg-white bottom-8 left-0 w-full"
-          @sendMessage="sendMessage" placeholder="向 Doc QA 询问" :showModelDropdown="false" :showNetworkSearch="false"/>
+          @sendMessage="sendMessage" placeholder="向 Doc QA 询问" :showModelDropdown="false"
+          networkSearchLabel="联网兜底"
+          :networkSearchSelected="chatStore.isKbNetworkFallbackSelected"
+          @update:networkSearchSelected="chatStore.updateKbNetworkFallbackStatus"/>
       </div>
 
       <!-- 抽屉：知识库问答文件管理 -->
@@ -259,6 +264,7 @@ import ChatInputBox from '@/components/ChatInputBox.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { useAuthStore } from '@/stores/authStore'
+import { useChatStore } from '@/stores/chatStore'
 import { UploadOutlined, SearchOutlined, RedoOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 import { findMarkdownFilePageList, deleteMarkdownFile, updateMarkdownFile, uploadFileChunk, mergeFileChunk, checkFile } from '@/api/knowledgeBase'
 import { message } from 'ant-design-vue'
@@ -270,6 +276,8 @@ console.log('首页传递过来的消息: ', history.state?.firstMessage)
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+// 「联网兜底」开关的状态存在 chat store 里（与对话页的「联网搜索」分开存）
+const chatStore = useChatStore()
 
 // 返回首页
 const jumpHomePage = () => {
@@ -296,7 +304,8 @@ const chatList = ref([{ role: 'assistant', content: '你好呀！我是 Doc QA �
 const chatId = ref(null)
 
 // 发送消息
-const sendMessage = async () => {
+// 参数由 ChatInputBox 的 sendMessage 事件传入，其中的 isNetworkSearch 即本页的「联网兜底」开关
+const sendMessage = async ({ isNetworkSearch } = {}) => {
   // 校验发送的消息不能为空
   if (!chatMessage.value.trim()) return
 
@@ -315,6 +324,8 @@ const sendMessage = async () => {
     const requestBody = {
       message: userMessage,
       chatId: chatId.value,
+      // 联网兜底开关：开启后后端才给模型挂载联网搜索工具
+      networkFallback: isNetworkSearch === true,
     }
 
     // 响应的回答

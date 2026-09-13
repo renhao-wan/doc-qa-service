@@ -16,6 +16,11 @@ export const useChatStore = defineStore('chat', () => {
   // 联网搜索状态，默认为false
   const isNetworkSearchSelected = ref(false)
 
+  // 知识库页「联网兜底」状态，默认为false。
+  // 与对话页的联网搜索分开存：两者语义不同（前者是直接联网检索替换知识库检索，
+  // 后者是知识库答不出时才由模型自主联网），共用一个字段会导致两边互相点亮。
+  const isKbNetworkFallbackSelected = ref(false)
+
   // 更新选中的模型
   function updateSelectedModel(model) {
     // 将所有模型的 selected 置为 false
@@ -35,8 +40,13 @@ export const useChatStore = defineStore('chat', () => {
     isNetworkSearchSelected.value = status
   }
 
+  // 更新知识库页联网兜底状态
+  function updateKbNetworkFallbackStatus(status) {
+    isKbNetworkFallbackSelected.value = status
+  }
+
   // 对外暴露相关变量与方法
-  return { models, selectedModel, isNetworkSearchSelected, updateSelectedModel, updateNetworkSearchStatus }
+  return { models, selectedModel, isNetworkSearchSelected, isKbNetworkFallbackSelected, updateSelectedModel, updateNetworkSearchStatus, updateKbNetworkFallbackStatus }
 },
 {
   // 开启持久化

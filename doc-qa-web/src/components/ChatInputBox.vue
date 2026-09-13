@@ -48,7 +48,7 @@
                 :class="isNetworkSearchSelected ? 'border-[#ceddee] bg-[#DBEAFE] hover:bg-[#C3DAF8]' : 'border-gray-300 hover:bg-gray-200'" 
                 @click="toggleNetworkSearch">
                     <SvgIcon name="network" customCss="w-5 h-5 mr-1.5" :class="isNetworkSearchSelected ? 'text-[#4D6BFE]' : 'text-gray-500'" />
-                    <span class="text-xs mr-1" :class="isNetworkSearchSelected ? 'text-[#4D6BFE]' : 'text-gray-800'">联网搜索</span>
+                    <span class="text-xs mr-1" :class="isNetworkSearchSelected ? 'text-[#4D6BFE]' : 'text-gray-800'">{{ props.networkSearchLabel }}</span>
                 </div>
             </div>
             <div class="grow"></div>
@@ -107,10 +107,18 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
+  networkSearchSelected: { // 联网开关的选中状态；不传则由组件内部读写 chatStore（对话页行为）
+    type: Boolean,
+    default: undefined
+  },
+  networkSearchLabel: { // 联网开关的文案
+    type: String,
+    default: '联网搜索'
+  },
 })
 
 // 定义 emits
-const emit = defineEmits(['update:modelValue', 'sendMessage'])
+const emit = defineEmits(['update:modelValue', 'update:networkSearchSelected', 'sendMessage'])
 
 // 计算属性，用于 v-model 的双向绑定
 const userMessage = computed({
@@ -192,13 +200,25 @@ const selectModel = (model) => {
   isModelDropdownOpen.value = false;
 }
 
-// 是否启用联网搜索，使用 store 中的状态
-const isNetworkSearchSelected = computed(() => chatStore.isNetworkSearchSelected)
+// 联网开关是否受控：父组件传了 networkSearchSelected 就走 v-model，
+// 否则回退到 store（对话页与知识库页的开关语义不同，状态必须各存各的）
+const isNetworkSearchControlled = computed(() => props.networkSearchSelected !== undefined)
 
-// 切换联网搜索选中状态
+// 是否启用联网，受控时取 prop，否则取 store 中的状态
+const isNetworkSearchSelected = computed(() =>
+  isNetworkSearchControlled.value ? props.networkSearchSelected : chatStore.isNetworkSearchSelected
+)
+
+// 切换联网选中状态
 const toggleNetworkSearch = () => {
-  // 更新 store 中的联网搜索状态
-  chatStore.updateNetworkSearchStatus(!chatStore.isNetworkSearchSelected)
+  const next = !isNetworkSearchSelected.value
+
+  if (isNetworkSearchControlled.value) {
+    emit('update:networkSearchSelected', next)
+  } else {
+    // 更新 store 中的联网搜索状态
+    chatStore.updateNetworkSearchStatus(next)
+  }
 }
 
 // 处理发送消息
@@ -211,7 +231,7 @@ const handleSendMessage = () => {
 
   emit('sendMessage', {
     selectedModel: chatStore.selectedModel,
-    isNetworkSearch: chatStore.isNetworkSearchSelected
+    isNetworkSearch: isNetworkSearchSelected.value
   });
   // 清空输入框
   userMessage.value = '';

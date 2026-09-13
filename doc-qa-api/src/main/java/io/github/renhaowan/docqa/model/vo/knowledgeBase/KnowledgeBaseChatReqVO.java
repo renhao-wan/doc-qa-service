@@ -27,4 +27,10 @@ public class KnowledgeBaseChatReqVO {
      */
     private String chatId;
 
+    /**
+     * 联网兜底开关：开启后才把联网搜索工具挂给模型，由模型自主决定是否调用。
+     * 缺省即关闭，不加 @NotNull
+     */
+    private Boolean networkFallback;
+
 }
