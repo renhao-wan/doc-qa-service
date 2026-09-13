@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -37,9 +38,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final SecurityContextRepository securityContextRepository;
 
-    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
+    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider,
+                                   SecurityContextRepository securityContextRepository) {
         this.jwtTokenProvider = jwtTokenProvider;
+        this.securityContextRepository = securityContextRepository;
     }
 
     @Override
@@ -60,6 +64,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList());
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                // ⚠️ 必须显式落库：Spring Security 6 的 SecurityContextHolderFilter 只从仓库读、不往回写，
+                // 少了这一行，身份就只活在 ThreadLocal 里。而两个 SSE 接口返回 Flux，流跑完后容器会再做一次
+                // ASYNC dispatch 重跑整条过滤链——本过滤器继承 OncePerRequestFilter，其
+                // shouldNotFilterAsyncDispatch() 默认为 true（ASYNC 时会被跳过），于是那一遍既没有
+                // ThreadLocal、仓库里又是空的，身份退化成匿名并被 AuthorizationFilter 拒掉。
+                securityContextRepository.saveContext(SecurityContextHolder.getContext(), request, response);
 
             } catch (ExpiredJwtException e) {
                 // 过期与签名无效对外返回同一个错误码，但日志里必须分开：

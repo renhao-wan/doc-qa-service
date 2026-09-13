@@ -19,6 +19,8 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -47,7 +49,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   SecurityContextRepository securityContextRepository) throws Exception {
         http
                 // 把 JWT 过滤器插在用户名密码过滤器之前——本项目不用表单登录，
                 // 这个位置实际就是「所有授权判断之前」，正是解析 token 的时机
@@ -65,6 +68,14 @@ public class SecurityConfig {
                 //    如果将来真出现独立域名部署，再开 CORS，且必须一并放行 OPTIONS 预检。
                 .cors(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Spring Security 6 是「显式保存」模型：SecurityContextHolderFilter 只从仓库读、不往回写。
+                // 不显式指定仓库的话，JwtAuthenticationFilter 认证出的身份就只活在 ThreadLocal 里，
+                // 而两个 SSE 接口返回 Flux，流跑完后容器会再做一次 ASYNC dispatch 把整条过滤链重跑一遍
+                // ——那一遍读不到身份，会退化成匿名并被 AuthorizationFilter 拒掉，最终在日志里留下
+                // AuthorizationDeniedException（响应早已 committed，异常转不成正常响应）。
+                // RequestAttributeSecurityContextRepository 把上下文存在请求属性上：同一次请求内的
+                // ASYNC dispatch 能读回来，又不会像 HttpSession 那样在无状态场景下建出会话。
+                .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
                 .authorizeHttpRequests(auth -> auth
                         // 放行清单只有登录。其余接口——包括两个 SSE 接口——全部要求认证。
                         // 业务侧的越权判断（A 能不能操作 B 的资源）在这一层管不了，
@@ -86,6 +97,25 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable);
 
         return http.build();
+    }
+
+    /**
+     * 认证上下文的存放位置：请求属性。
+     * <p>
+     * ⚠️ 不能用默认的 {@code DelegatingSecurityContextRepository}（内含
+     * {@code HttpSessionSecurityContextRepository}）——它会在保存时建出 HttpSession，
+     * 与 {@code SessionCreationPolicy.STATELESS} 的意图冲突。请求属性作用域天然随请求
+     * 结束而消失，不跨请求、不建会话，但仍能在同一次请求的 ASYNC dispatch 中被读到，
+     * 这正是它为解决异步 dispatch 丢失身份而存在的原因。
+     * <p>
+     * ⚠️ 必须是 {@code static} 方法，不能去掉：{@code SecurityConfig} 的构造器依赖
+     * {@code JwtAuthenticationFilter}，而该过滤器又依赖本 Bean——写成实例方法会构成
+     * {@code securityConfig → jwtAuthenticationFilter → securityConfig} 的循环依赖，启动即失败。
+     * 静态 {@code @Bean} 方法无需先实例化配置类即可产出 Bean，循环由此断开。
+     */
+    @Bean
+    public static SecurityContextRepository securityContextRepository() {
+        return new RequestAttributeSecurityContextRepository();
     }
 
     /**
