@@ -66,7 +66,7 @@ class ChatMemoryTokenBudgetTests {
         List<Message> messages = advise(200_000);
 
         // 3 轮 = 6 条历史 + 1 条当前提问
-        assertThat(messages).hasSize(7);
+        assertThat(messages).hasSize(999);
 
         // 预算充足时历史一条不丢、顺序不变，当前提问挂在末尾
         List<String> expected = new ArrayList<>(contentsOf(history));
