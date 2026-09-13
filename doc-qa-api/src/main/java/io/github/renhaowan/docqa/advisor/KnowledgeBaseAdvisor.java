@@ -34,6 +34,19 @@ public class KnowledgeBaseAdvisor implements StreamAdvisor {
     private final boolean webFallback;
 
     /**
+     * 向量检索返回的文档条数。
+     * <p>
+     * 做成可配而不是写死，是为了让「topK 取多少合适」能被实测，而不是拍一个数字。
+     * 取值依据与对照数据见 docs/rag-evaluation.md。
+     */
+    private final int topK;
+
+    /**
+     * 配置缺失时的兜底条数，与 application-dev.yml 的 knowledge-base.top-k 保持一致
+     */
+    private static final int DEFAULT_TOP_K = 3;
+
+    /**
      * 知识库提示词模板（未开启联网兜底：严格基于检索到的上下文作答）
      */
     private static final PromptTemplate DEFAULT_PROMPT_TEMPLATE = new PromptTemplate("""
@@ -107,13 +120,14 @@ public class KnowledgeBaseAdvisor implements StreamAdvisor {
             现在请根据以上要求回答问题。
             """);
 
-    public KnowledgeBaseAdvisor(VectorStore vectorStore) {
-        this(vectorStore, false);
+    public KnowledgeBaseAdvisor(VectorStore vectorStore, boolean webFallback) {
+        this(vectorStore, webFallback, DEFAULT_TOP_K);
     }
 
-    public KnowledgeBaseAdvisor(VectorStore vectorStore, boolean webFallback) {
+    public KnowledgeBaseAdvisor(VectorStore vectorStore, boolean webFallback, int topK) {
         this.vectorStore = vectorStore;
         this.webFallback = webFallback;
+        this.topK = topK;
     }
 
     @Override
@@ -132,7 +146,7 @@ public class KnowledgeBaseAdvisor implements StreamAdvisor {
         // 检索与查询相似的文档
         List<Document> documents = vectorStore.similaritySearch(SearchRequest.builder()
                 .query(userMessage.getText()) // 查询的关键词
-                .topK(3) // 查询相似度最高的 3 条文档
+                .topK(topK) // 查询条数由 knowledge-base.top-k 配置
                 .build());
 
         // 构建向量查询结果上下文信息

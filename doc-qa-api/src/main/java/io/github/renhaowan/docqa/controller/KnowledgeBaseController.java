@@ -52,6 +52,8 @@ public class KnowledgeBaseController {
     private String model;
     @Value("${knowledge-base.temperature}")
     private Double temperature;
+    @Value("${knowledge-base.top-k}")
+    private Integer topK;
 
     @PostMapping("/file/check")
     @ApiOperationLog(description = "检查文件是否存在")
@@ -130,7 +132,7 @@ public class KnowledgeBaseController {
         List<Advisor> advisors = Lists.newArrayList();
         // 检索向量库，组合增强提示词；提示词必须与工具是否挂载保持一致，
         // 否则模型会在没有工具可用时凭空编造联网结果
-        advisors.add(new KnowledgeBaseAdvisor(vectorStore, webFallback));
+        advisors.add(new KnowledgeBaseAdvisor(vectorStore, webFallback, topK));
 
         // 应用 Advisor 集合
         chatClientRequestSpec.advisors(advisors);
