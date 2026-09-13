@@ -16,6 +16,17 @@ spring:
       maximum-pool-size: 20 # 最大连接池大小
       connection-test-query: SELECT 1 # 连接测试查询
       validation-timeout: 5000 # 验证连接的有效性
+  flyway:
+    # 迁移脚本目录。第二个目录**只在开发环境加载**，里面装着演示账号的预置数据
+    # （db/dev-migration/V3__seed_demo_users.sql）。生产不配置它，那些脚本就不会执行——
+    # 迁移脚本是跨环境同一份的，把预置账号放进 db/migration/ 会连生产库一起插进去。
+    locations: classpath:db/migration,classpath:db/dev-migration
+    # 已有的开发库（此前由 db/init/01-schema.sql 建表）是非空的：开启后 Flyway 会在
+    # 非空 schema 上建立 baseline（默认版本 1）并跳过 V1，从 V2 往后正常执行；
+    # 全新空库不受影响，V1 照常执行。
+    # ⚠️ 不开这一项的话，在已有库上启动会直接报
+    #    「Found non-empty schema but no schema history table」并拒绝启动。
+    baseline-on-migrate: true
   ai:
     openai:
       base-url: https://dashscope.aliyuncs.com/compatible-mode # OpenAI 服务的访问地址，这里使用的是阿里云百炼
@@ -26,13 +37,16 @@ spring:
           dimensions: 1536
     vectorstore:
       pgvector:
-        # 启动时自动建 t_vector_store 表与索引（SQL 全部为 IF NOT EXISTS，重复启动不会重建、不动已有数据）。
-        # ⚠️ Spring AI 中该开关**默认 false**：不开则表不存在，且应用启动毫无异常，
-        #    直到第一次向量检索/写入才报 BadSqlGrammarException（表现为文件向量化状态变 FAILED）。
-        # ⚠️ 仅限开发/测试环境使用：它需要 CREATE EXTENSION 权限；且多实例并发启动时
-        #    CREATE EXTENSION IF NOT EXISTS 并非原子，可能撞 pg_extension 唯一索引。
-        # 生产环境应关闭此项，改由 Flyway 等迁移工具建表（见 TODO 阶段四）。
-        initialize-schema: true
+        # ⚠️ 已关闭，t_vector_store 改由 Flyway 建（见 db/migration/V2__vector_store.sql）。
+        #    本项为 true 时由 PgVectorStore 在启动时自动建表，问题有三：
+        #      1. 需要 CREATE EXTENSION 权限，且多实例并发启动时 CREATE EXTENSION
+        #         IF NOT EXISTS 并非原子，可能撞 pg_extension 唯一索引；
+        #      2. 表结构不进版本库、无法演进；
+        #      3. 与 Flyway 职责重叠，两边都想建这张表。
+        # ⚠️ 不要改回 true 就以为万事大吉：spring.ai.vectorstore.pgvector 下的
+        #    dimensions / index-type / distance-type / table-name 仍是**运行时**配置，
+        #    应用读写这张表时按它们生成 SQL——改了这里就必须同步改 V2 的 DDL。
+        initialize-schema: false
         index-type: HNSW # 索引类型
         distance-type: COSINE_DISTANCE # 距离类型
         dimensions: 1536 # 嵌入维度

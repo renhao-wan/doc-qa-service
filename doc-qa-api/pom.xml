@@ -157,6 +157,19 @@
             <version>${p6spy.version}</version>
         </dependency>
 
+        <!-- 数据库迁移。版本由 spring-boot-starter-parent 统一管理，不要在这里写死 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <!-- ⚠️ Flyway 10 起数据库支持被拆成独立模块，PostgreSQL 必须额外引入这一个，
+             少了它启动会报「Unsupported Database: PostgreSQL 16.x」 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- AOP 切面 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

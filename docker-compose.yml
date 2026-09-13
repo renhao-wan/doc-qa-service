@@ -35,8 +35,11 @@ services:
       - "5432:5432"
     volumes:
       - doc-qa-pg-data:/var/lib/postgresql/data
-      # 仅在数据卷为空（首次启动）时执行，之后改动不会重跑
-      - ./db/init:/docker-entrypoint-initdb.d:ro
+      # ⚠️ 这里曾挂载 ./db/init 到 /docker-entrypoint-initdb.d，现已移除：
+      # 建表改由 Flyway 接管（doc-qa-api/src/main/resources/db/migration/）。
+      # 那个挂载只在数据卷为空时执行一次、之后改动永不生效，与 Flyway「每次启动对账」
+      # 的职责完全重叠，两边并存必然漂移。
+      # 空库启动时 Flyway 会依次执行 V1（业务表）、V2（向量表）、V3（演示账号，仅 dev）。
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d robot" ]
       interval: 10s
