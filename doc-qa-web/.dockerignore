@@ -1,0 +1,17 @@
+# 构建阶段的上下文排除清单。
+#
+# ⚠️ node_modules/ 必须排除：宿主机上的依赖可能是为别的平台（Windows / 别的 CPU 架构）
+#    装的，被 COPY 进 Linux 容器后 esbuild、rollup 这类带原生二进制的包会直接报错。
+#    镜像内由 `npm ci` 重新安装，本就该如此
+node_modules/
+
+# 宿主机的构建产物。镜像内会重新 build，拷进去只会白占上下文
+dist/
+dist-ssr/
+
+# IDE 与本地配置
+.vscode/
+*.local
+
+# 说明性文件，运行时用不到
+README.md

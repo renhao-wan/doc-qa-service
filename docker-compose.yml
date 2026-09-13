@@ -1,14 +1,21 @@
-# doc-qa-service 本地依赖编排
+# doc-qa-service 一键编排
 #
-# 当前包含 PostgreSQL（带 pgvector）与 SearXNG（联网搜索）。
-# 应用本身待「Docker 化」阶段再加入，届时 app 服务直接挂到 doc-qa-net 上，
-# 用服务名 postgres / searxng 访问，不再需要 ports 映射。
+# 四个服务：postgres（带 pgvector）、searxng（联网搜索）、app（后端）、web（前端）。
+# app / web / postgres / searxng 同处 doc-qa-net 网络，用**服务名**互相访问，
+# 因此容器里的数据源与 SearXNG 地址跟本机跑时不同——差异全部集中在 app 服务的
+# environment 段里（见下方注释），没有第二份 profile 配置文件。
 #
-# 启动：docker compose up -d
+# 准备：
+#   1. cp .env.example .env，填入 DASHSCOPE_API_KEY。
+#      没填的话 compose 会直接报错退出，不会静默启动出一个每次问答都失败的容器
+# 启动：docker compose up -d --build
+# 访问：http://localhost:8081          （前端；后端接口经 nginx 反代，无需单独访问）
 # 查看：docker compose ps
 # 日志：docker compose logs -f <服务名>
-# 停止：docker compose down          （保留数据卷）
-# 清库：docker compose down -v       （连同数据卷一起删除，慎用）
+# 停止：docker compose down            （保留数据卷）
+# 清库：docker compose down -v         （连同数据卷一起删除，慎用）
+#
+# 只在 IDE 里跑应用、依赖用容器：docker compose up -d postgres searxng
 
 services:
   postgres:
@@ -24,7 +31,7 @@ services:
       POSTGRES_PASSWORD: postgres
       TZ: Asia/Shanghai
     ports:
-      # 宿主机 IDE 直连用；将来 app 并入同一网络后可去掉
+      # 保留给宿主机 IDE 直连用（app 容器走的是网络内的 5432，不经这里）
       - "5432:5432"
     volumes:
       - doc-qa-pg-data:/var/lib/postgresql/data
@@ -51,7 +58,7 @@ services:
       - SEARXNG_SECRET=docqa-local-dev-secret-please-change
     ports:
       # 宿主机 8888 被 AnythingLLM 占用，故改用 8889
-      # 将来 app 并入同一网络后改用 http://searxng:8080，不再需要端口映射
+      # 保留给宿主机直接调试搜索接口（app 容器走的是网络内的 8080，不经这里）
       - "8889:8080"
     volumes:
       # 挂载配置目录，容器首次启动会写入 settings.yml 及缓存
@@ -59,8 +66,58 @@ services:
     networks:
       - doc-qa-net
 
+  app:
+    build:
+      # 构建上下文就是后端目录：仓库里没有根级 pom，Dockerfile 也在 doc-qa-api/ 下
+      context: ./doc-qa-api
+    container_name: doc-qa-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        # 等 healthcheck 通过再启动。不等的话应用会在数据库就绪前尝试建连接池并启动失败
+        condition: service_healthy
+    environment:
+      # ⚠️ 容器内必须用服务名，application-dev.yml 里的 localhost 在容器里指向容器自己。
+      #    这里用环境变量覆盖（Spring Boot 的 relaxed binding），而不是单开一份
+      #    application-docker.yml —— 后者会把数据源、searxng、路径拆成两份，
+      #    日后改一处漏一处是必然的。差异集中在本段，读的人一眼看全「容器跟本机差在哪」
+      SPRING_DATASOURCE_URL: jdbc:p6spy:postgresql://postgres:5432/robot
+      SEARXNG_URL: http://searxng:8080/search
+      # 从宿主环境或同目录 .env 注入，**绝不写进本文件**（本文件被 git 跟踪）。
+      # `:?` 表示未设置时直接报错退出——比静默用 yml 里的 xxx 占位符启动、
+      # 然后每次问答都失败要好定位得多
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?请在宿主环境或 .env 中设置 DASHSCOPE_API_KEY}
+      # 刻意不传 JWT_SECRET：让 application-dev.yml 的默认值生效，本地开箱即用。
+      # 要让签名密钥随环境变化，在这里补一行 JWT_SECRET: ${JWT_SECRET} 并从外部注入
+      TZ: Asia/Shanghai
+    volumes:
+      # 知识库文件与分片的持久化位置（对应容器内 /app/data）。
+      # 不挂卷的话容器一重建，已上传的文件就没了，而数据库里的记录还在
+      - doc-qa-app-data:/app/data
+    ports:
+      # 直连后端接口调试用；正常访问前端走 web 服务
+      - "8080:8080"
+    networks:
+      - doc-qa-net
+
+  web:
+    build:
+      context: ./doc-qa-web
+    container_name: doc-qa-web
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      # 宿主机 80 端口在 Windows 上常被 IIS 或别的服务占用，故改用 8081。
+      # 想用 http://localhost 直接访问的话，把这里改成 "80:80"
+      - "8081:80"
+    networks:
+      - doc-qa-net
+
 volumes:
   doc-qa-pg-data:
+  # 知识库文件与上传分片
+  doc-qa-app-data:
 
 networks:
   doc-qa-net:
