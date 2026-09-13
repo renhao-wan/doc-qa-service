@@ -140,6 +140,12 @@ services:
       # ⚠️ 用变量而非写死 80：Windows 宿主机 80 常被 IIS 占用（本地默认 8081），
       #    服务器上在 .env 里设成 80
       - "${WEB_HTTP_PORT:-8081}:80"
+      # Cloudflare 是 Full (strict)，回源走 443
+      - "${WEB_HTTPS_PORT:-8443}:443"
+    volumes:
+      # 证书目录：服务器放 Cloudflare Origin Certificate，本地放自签证书（见 .gitignore）。
+      # 只读挂载——容器没有理由写它
+      - ./certs:/etc/nginx/certs:ro
     networks:
       - doc-qa-net
 
