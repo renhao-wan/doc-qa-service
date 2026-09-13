@@ -1,0 +1,72 @@
+name: Deploy
+
+# 仅手动触发。刻意不挂 push —— 避免写到一半的提交直接上生产
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '要部署的镜像 tag（git sha）。留空则部署当前 ref 的 HEAD'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  deploy:
+    name: 部署到生产服务器
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 支持填一个旧的 sha 来回滚 —— 这是成本最低的回滚方式：
+      # 找到上一个成功的 sha 重跑一次即可，不需要额外的回滚机制
+      - name: 解析目标镜像 tag
+        id: tag
+        run: |
+          if [[ -n "${{ inputs.image_tag }}" ]]; then
+            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 准备 SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 同步编排文件与部署脚本
+        # 一起同步：部署脚本与 compose 文件必须和被部署的代码同一个版本
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            docker-compose.yml scripts/deploy.sh \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/doc-qa-service/"
+
+      - name: 写入 .env
+        # ⚠️ 走 stdin 而不是 ssh 的命令行参数：命令行参数会出现在服务器的进程列表里
+        #    （ps 可见）。GitHub Actions 会自动对 secrets 打码，日志侧是安全的
+        # ⚠️ SPRING_PROFILES_ACTIVE 必须是 prod：dev 的迁移目录含演示账号（demo/demo123），
+        #    且 JWT 密钥是公开默认值，部署到公网等于公开发布登录凭证
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "cat > /opt/doc-qa-service/.env && chmod 600 /opt/doc-qa-service/.env" <<EOF
+          IMAGE_TAG=${{ steps.tag.outputs.value }}
+          SPRING_PROFILES_ACTIVE=prod
+          WEB_HTTP_PORT=80
+          WEB_HTTPS_PORT=443
+          DASHSCOPE_API_KEY=${{ secrets.DASHSCOPE_API_KEY }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          SEARXNG_SECRET=${{ secrets.SEARXNG_SECRET }}
+          EOF
+
+      - name: 执行部署
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "cd /opt/doc-qa-service && bash deploy.sh"
+
+      - name: 部署结果摘要
+        if: always()
+        run: |
+          echo "### 部署 ${{ job.status }}：\`${{ steps.tag.outputs.value }}\`" >> "$GITHUB_STEP_SUMMARY"
