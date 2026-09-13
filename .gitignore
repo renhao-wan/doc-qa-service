@@ -38,6 +38,14 @@ Thumbs.db
 # TLS 证书（Cloudflare Origin Certificate 与本地自签证书）。
 # 私钥绝不能进版本库；公钥虽然可以公开，但两份文件总是一起流转，一起排除更省心
 certs/
+# ⚠️ 上面那条只挡目录，挡不住落在仓库根目录里的同名文件 —— 从 Cloudflare
+#    下载证书时很容易随手存到根目录，而 origin.key 是**私钥**、本仓库又是公开的。
+#    这里按后缀再兜一层，免得靠「记得先 mkdir」这种人工步骤保命
+*.crt
+*.key
+*.pem
+*.p12
+*.pfx
 
 # ---------- 运行时数据 ----------
 # 知识库文件与上传分片的落盘位置（knowledge-base.file-storage-path / chunk-path）
