@@ -45,12 +45,16 @@ jobs:
       - name: 写入 .env
         # ⚠️ 走 stdin 而不是 ssh 的命令行参数：命令行参数会出现在服务器的进程列表里
         #    （ps 可见）。GitHub Actions 会自动对 secrets 打码，日志侧是安全的
+        # ⚠️ 结束符必须写成带引号的 <<'EOF'：GitHub 的 ${{ }} 替换发生在 **shell 解析之前**，
+        #    引号只关掉 shell 自身的参数展开，不影响 secrets 的替换。不写引号的话，
+        #    密钥里若含 $ 或反引号会被本地 shell 二次展开，写进 .env 的就不是原值了 ——
+        #    而 JWT_SECRET 出错不会让启动失败，只会让所有已签发的 token 静默失效
         # ⚠️ SPRING_PROFILES_ACTIVE 必须是 prod：dev 的迁移目录含演示账号（demo/demo123），
         #    且 JWT 密钥是公开默认值，部署到公网等于公开发布登录凭证
         run: |
           ssh -i ~/.ssh/deploy_key \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
-            "cat > /opt/doc-qa-service/.env && chmod 600 /opt/doc-qa-service/.env" <<EOF
+            "cat > /opt/doc-qa-service/.env && chmod 600 /opt/doc-qa-service/.env" <<'EOF'
           IMAGE_TAG=${{ steps.tag.outputs.value }}
           SPRING_PROFILES_ACTIVE=prod
           WEB_HTTP_PORT=80
