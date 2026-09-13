@@ -24,6 +24,8 @@ services:
     image: pgvector/pgvector:pg16
     container_name: doc-qa-postgres
     restart: unless-stopped
+    # 服务器 1.6G 内存的硬约束，见 app 服务的同名项
+    mem_limit: 384m
     environment:
       # 与 application-dev.yml 中的数据源配置保持一致
       POSTGRES_DB: robot
@@ -32,7 +34,9 @@ services:
       TZ: Asia/Shanghai
     ports:
       # 保留给宿主机 IDE 直连用（app 容器走的是网络内的 5432，不经这里）
-      - "5432:5432"
+      # ⚠️ 必须绑回环：这台机器要部署到公网，而库密码是 postgres/postgres。
+      #    不绑回环等于把数据库直接挂在公网上
+      - "127.0.0.1:5432:5432"
     volumes:
       - doc-qa-pg-data:/var/lib/postgresql/data
       # ⚠️ 这里曾挂载 ./db/init 到 /docker-entrypoint-initdb.d，现已移除：
@@ -54,15 +58,18 @@ services:
     image: searxng/searxng:2026.9.11-61d660276
     container_name: doc-qa-searxng
     restart: unless-stopped
+    # 服务器 1.6G 内存的硬约束，见 app 服务的同名项
+    mem_limit: 384m
     environment:
       # 与 application-dev.yml 的 searxng.url 对应
       - SEARXNG_BASE_URL=http://localhost:8889/
-      # 会话签名密钥。这里是为本地开发写死的固定值，部署到公网前务必替换
-      - SEARXNG_SECRET=docqa-local-dev-secret-please-change
+      # 会话签名密钥，从 .env 注入；下面这个缺省值仅供本地开发，公网部署必须覆盖
+      - SEARXNG_SECRET=${SEARXNG_SECRET:-docqa-local-dev-secret-please-change}
     ports:
       # 宿主机 8888 被 AnythingLLM 占用，故改用 8889
       # 保留给宿主机直接调试搜索接口（app 容器走的是网络内的 8080，不经这里）
-      - "8889:8080"
+      # ⚠️ 绑回环：SearXNG 若不设限流，暴露到公网等于送人一个开放代理
+      - "127.0.0.1:8889:8080"
     volumes:
       # 挂载配置目录，容器首次启动会写入 settings.yml 及缓存
       - ./searxng:/etc/searxng:rw
@@ -70,6 +77,11 @@ services:
       - doc-qa-net
 
   app:
+    # 本地：IMAGE_TAG 未设置 → :local，由 docker compose up -d --build 构建
+    # 服务器：.env 里 IMAGE_TAG=<git-sha>，由 docker compose pull 拉取。
+    # ⚠️ 用不可变的 sha 而非 latest：latest 漂移时容器可能带着旧镜像启动，
+    #    而 docker ps 上看不出任何异常
+    image: ghcr.io/renhao-wan/doc-qa-service-api:${IMAGE_TAG:-local}
     build:
       # 构建上下文就是后端目录：仓库里没有根级 pom，Dockerfile 也在 doc-qa-api/ 下
       context: ./doc-qa-api
@@ -79,7 +91,12 @@ services:
       postgres:
         # 等 healthcheck 通过再启动。不等的话应用会在数据库就绪前尝试建连接池并启动失败
         condition: service_healthy
+    # 服务器 1.6G 内存的硬约束。不限制的话 JVM 按物理内存取堆，会跟其他容器抢
+    mem_limit: 512m
     environment:
+      # dev 与 prod 的差异不只是 host：dev 的迁移目录含演示账号、JWT 密钥是公开默认值，
+      # 所以服务器上必须显式设为 prod
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       # ⚠️ 容器内必须用服务名，application-dev.yml 里的 localhost 在容器里指向容器自己。
       #    这里用环境变量覆盖（Spring Boot 的 relaxed binding），而不是单开一份
       #    application-docker.yml —— 后者会把数据源、searxng、路径拆成两份，
@@ -90,30 +107,39 @@ services:
       # `:?` 表示未设置时直接报错退出——比静默用 yml 里的 xxx 占位符启动、
       # 然后每次问答都失败要好定位得多
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?请在宿主环境或 .env 中设置 DASHSCOPE_API_KEY}
-      # 刻意不传 JWT_SECRET：让 application-dev.yml 的默认值生效，本地开箱即用。
-      # 要让签名密钥随环境变化，在这里补一行 JWT_SECRET: ${JWT_SECRET} 并从外部注入
+      # ⚠️ 不能写成 ${JWT_SECRET:-}：那样本地不设时会往容器里传一个**空字符串**，
+      #    而 Spring 的 ${JWT_SECRET:默认值} 只在变量**未定义**时才回退到默认值 ——
+      #    空字符串会被当成有效密钥，jjwt 抛 WeakKeyException（0 bits）导致启动即失败。
+      #    这里给出与 application-dev.yml 完全相同的开发默认值，保证本地开箱即用；
+      #    生产侧「必须设置真实密钥」由 deploy.sh 校验 .env 里 JWT_SECRET 非空来兜底
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-override-in-prod}
+      # 容器只认物理内存上限的 70%，给其他容器和系统留余量
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
       TZ: Asia/Shanghai
     volumes:
       # 知识库文件与分片的持久化位置（对应容器内 /app/data）。
       # 不挂卷的话容器一重建，已上传的文件就没了，而数据库里的记录还在
       - doc-qa-app-data:/app/data
     ports:
-      # 直连后端接口调试用；正常访问前端走 web 服务
-      - "8080:8080"
+      # ⚠️ 绑定回环地址：本地 IDE 连 localhost:8080 照常，
+      #    但部署到公网后从外部访问不到（否则等于绕过 nginx 直连后端）
+      - "127.0.0.1:8080:8080"
     networks:
       - doc-qa-net
 
   web:
+    image: ghcr.io/renhao-wan/doc-qa-service-web:${IMAGE_TAG:-local}
     build:
       context: ./doc-qa-web
     container_name: doc-qa-web
     restart: unless-stopped
     depends_on:
       - app
+    mem_limit: 64m
     ports:
-      # 宿主机 80 端口在 Windows 上常被 IIS 或别的服务占用，故改用 8081。
-      # 想用 http://localhost 直接访问的话，把这里改成 "80:80"
-      - "8081:80"
+      # ⚠️ 用变量而非写死 80：Windows 宿主机 80 常被 IIS 占用（本地默认 8081），
+      #    服务器上在 .env 里设成 80
+      - "${WEB_HTTP_PORT:-8081}:80"
     networks:
       - doc-qa-net
 

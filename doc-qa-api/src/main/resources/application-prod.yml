@@ -1,0 +1,89 @@
+# 生产环境配置。由 docker-compose.yml 通过 SPRING_PROFILES_ACTIVE=prod 激活。
+#
+# ⚠️ 与 dev 的本质差异不是 host，而是**安全边界**：
+#   1. flyway.locations 不含 classpath:db/dev-migration —— 那个目录装着密码为
+#      demo123 的演示账号，随迁移进生产库等于公开发布登录凭证
+#   2. auth.jwt.secret 没有缺省值 —— 缺失即启动失败，不会退回 dev 那个公开的默认密钥
+#
+# host 差异（postgres / searxng 用服务名）仍由 compose 的环境变量覆盖，分工与 dev 时相同：
+# 本文件管「生产与开发的语义差异」，compose 管「容器与宿主机的地址差异」。
+
+spring:
+  datasource:
+    driver-class-name: com.p6spy.engine.spy.P6SpyDriver
+    url: jdbc:p6spy:postgresql://postgres:5432/robot
+    username: postgres
+    password: postgres
+    hikari:
+      pool-name: AI-Robot-HikariCP
+      auto-commit: true
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      # 比 dev 小：服务器只有 1.6G 内存，20 个连接（含 5 个常驻空闲）纯属浪费
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-test-query: SELECT 1
+      validation-timeout: 5000
+  flyway:
+    # ⚠️ 只有 db/migration，**不含** db/dev-migration。
+    #
+    # ⚠️ 新增生产迁移时注意版本号：db/dev-migration 下的 V3 已被「演示账号」占用，
+    #    往这里加脚本必须从 **V4** 开始。用成 V3 的话，dev 环境（两个目录都加载）
+    #    会报 duplicate version 而启动失败。
+    #
+    # ⚠️ 反过来也要注意：db/dev-migration 存在一个更隐蔽的后果 —— 任何被 dev profile
+    #    执行过的库，其 flyway_schema_history 里都有 V3 记录，切到 prod profile 启动时
+    #    Flyway validate 会报「Detected applied migration not resolved locally: 3」并拒绝启动。
+    #    所以生产库**绝不能被 dev profile 碰过**。真踩了要 flyway repair，不要手工删记录。
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  ai:
+    openai:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      # ⚠️ 无缺省值。dev 里写的是 ${DASHSCOPE_API_KEY:xxx}，那个 xxx 会让每次问答
+      #    静默失败；这里没配就直接起不来，失败要趁早
+      api-key: ${DASHSCOPE_API_KEY}
+      embedding:
+        options:
+          model: text-embedding-v4
+          dimensions: 1536
+    vectorstore:
+      pgvector:
+        # 表由 Flyway 的 V2 建，见 doc-qa-api/src/main/resources/db/migration/
+        initialize-schema: false
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1536
+        max-document-batch-size: 10000
+        table-name: t_vector_store
+
+okhttp:
+  connect-timeout: 5000
+  read-timeout: 30000
+  write-timeout: 15000
+  max-idle-connections: 50
+  keep-alive-duration: 5
+
+searxng:
+  url: http://searxng:8080/search
+  count: 10
+
+knowledge-base:
+  # 容器内绝对路径。dev 用的是相对路径 ./data/files（基准是容器工作目录 /app），
+  # 两者等价；生产写绝对路径是为了让「文件落在哪」在配置里一眼可见
+  file-storage-path: /app/data/files
+  chunk-path: /app/data/chunks
+  model: deepseek-v3
+  temperature: 0.0
+  top-k: 3
+
+chat:
+  memory:
+    max-tokens: 8000
+
+auth:
+  jwt:
+    # ⚠️ 无缺省值，缺 JWT_SECRET 环境变量即启动失败
+    secret: ${JWT_SECRET}
+    expire-days: 7
