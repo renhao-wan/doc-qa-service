@@ -64,6 +64,18 @@ okhttp: # OkHttp 客户端配置
 searxng: # SearXNG 搜索引擎配置
   url: http://localhost:8889/search # SearXNG 服务的 API 端点地址（宿主机 8888 被 AnythingLLM 占用）
   count: 10 # 每次从搜索结果中，提取的最大数量
+  # 聚合的目标搜索引擎。⚠️ 引擎可用性**强依赖部署环境的网络**，本地与服务器取值不必相同：
+  # 本地开发机可访问境外，服务器（阿里云机房、无代理）几乎必然不通 Google 系。
+  # 可用环境变量 SEARXNG_ENGINES 覆盖，不必改代码重新构建镜像。
+  #
+  # 2026-09-13 实测结论（排查时对照用）——「不可用」有好几种**不同的**原因，别搞混：
+  #   可用：360search naver presearch mwmbl yandex marginalia startpage
+  #   baidu         被反爬拦下，日志 SearxEngineCaptchaException，随后被挂起 1 小时
+  #   quark / sogou SearXNG 引擎代码自身报 AttributeError（页面结构变了，待上游修）
+  #   bing          请求成功但解析出 0 条，无任何报错 —— 属静默失效，最难查
+  #   wolframalpha / seznam / mojeek   网络超时
+  # ⚠️ 引擎名必须与 SearXNG 实例的 /config 端点完全一致，写错会被静默忽略
+  engines: 360search,naver,presearch,mwmbl,yandex
 
 
 knowledge-base: # 企业知识库

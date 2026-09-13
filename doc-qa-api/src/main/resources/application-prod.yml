@@ -68,6 +68,12 @@ okhttp:
 searxng:
   url: http://searxng:8080/search
   count: 10
+  # 聚合的目标搜索引擎。⚠️ 服务器是阿里云机房、没有代理，Google 系（startpage 等）
+  # 在这里几乎必然不通 —— 下面这组是保守取值，只保留本地实测可用、且不依赖境外网络的引擎。
+  # ⚠️ 部署后**必须实测一次**（见计划 Task 6）：日志里看 docker logs doc-qa-searxng
+  # 有没有 engine timeout / CaptchaException，或直接 curl 搜索接口看 results 是否为空。
+  # 要调整时用环境变量 SEARXNG_ENGINES 覆盖即可，不必改代码重新构建镜像。
+  engines: 360search,naver,presearch,mwmbl
 
 knowledge-base:
   # 容器内绝对路径。dev 用的是相对路径 ./data/files（基准是容器工作目录 /app），

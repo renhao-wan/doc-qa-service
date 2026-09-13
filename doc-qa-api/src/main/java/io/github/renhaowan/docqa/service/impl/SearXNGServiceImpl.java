@@ -38,13 +38,26 @@ public class SearXNGServiceImpl implements SearXNGService {
     @Value("${searxng.count}")
     private int count;
 
+    /**
+     * 聚合的目标搜索引擎。
+     * <p>
+     * ⚠️ 做成配置项而不是写死：本地开发机与服务器（阿里云机房）的网络环境不同，
+     * 能访问的引擎完全不是一回事 —— 写死意味着换环境要改代码、重建镜像再部署。
+     * 可用环境变量 {@code SEARXNG_ENGINES} 覆盖（Spring Boot 的 relaxed binding）。
+     * <p>
+     * 引擎名必须与 SearXNG 的完全一致（见实例的 {@code /config} 端点），写错会被静默忽略。
+     * 某个引擎失效的表现通常不是报错而是**结果为空**，排查时先看 SearXNG 容器日志。
+     */
+    @Value("${searxng.engines}")
+    private String engines;
+
     @Override
     public List<SearchResultDTO> search(String query) {
         // 构建 SearXNG API 请求 URL
         HttpUrl httpUrl = HttpUrl.parse(searxngUrl).newBuilder()
                 .addQueryParameter("q", query) // 设置搜索关键词
                 .addQueryParameter("format", "json") // 指定返回 JSON 格式
-                .addQueryParameter("engines", "wolframalpha,presearch,seznam,mwmbl,encyclosearch,bpb,mojeek,right dao,wikimini,crowdview,searchmysite,bing,naver,360search") // 指定聚合的目标搜索引擎（配置本地网络能够访问的通的搜索引擎）
+                .addQueryParameter("engines", engines) // 指定聚合的目标搜索引擎，取值来自 searxng.engines 配置
                 .build();
 
         // 创建 HTTP GET 请求
