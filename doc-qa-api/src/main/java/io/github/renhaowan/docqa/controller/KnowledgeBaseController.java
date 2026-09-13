@@ -63,7 +63,7 @@ public class KnowledgeBaseController {
 
     @PostMapping("/file/upload-chunk")
     @ApiOperationLog(description = "文件分片上传")
-    public Response<?> uploadChunk(@ModelAttribute UploadChunkReqVO uploadChunkReqVO) {
+    public Response<?> uploadChunk(@ModelAttribute @Validated UploadChunkReqVO uploadChunkReqVO) {
         return knowledgeBase.uploadChunk(uploadChunkReqVO);
     }
 
