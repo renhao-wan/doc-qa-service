@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: 后端测试
+    runs-on: ubuntu-latest
+    services:
+      # ⚠️ 必须起：项目里 11 个测试类是 @SpringBootTest，会连 localhost:5432。
+      #    runner 上没有数据库的话 CI 会一片红。
+      #    顺带的好处：库是空白的，Flyway 会在测试启动时从零建表，
+      #    等于每次 push 都把三份迁移脚本在干净环境里验一遍。
+      postgres:
+        image: pgvector/pgvector:pg16   # 官方 postgres 镜像不含 pgvector
+        env:
+          POSTGRES_DB: robot
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+      - name: 跑全量测试
+        working-directory: doc-qa-api
+        run: mvn -B test
+
+  frontend:
+    name: 前端构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: doc-qa-web/package-lock.json
+      - name: 安装依赖
+        working-directory: doc-qa-web
+        run: npm ci
+      - name: 构建
+        working-directory: doc-qa-web
+        run: npm run build
+
+  images:
+    name: 构建并推送镜像
+    # PR 上只测试不推镜像；镜像只在 main 上产出
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 构建并推送后端镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: ./doc-qa-api
+          push: true
+          # ⚠️ sha 是不可变 tag，部署路径只认它；latest 只用来标记「最新是哪个」。
+          #    若只推 latest，服务器可能带着旧镜像启动而 docker ps 上看不出异常
+          tags: |
+            ghcr.io/${{ github.repository }}-api:${{ github.sha }}
+            ghcr.io/${{ github.repository }}-api:latest
+          # ⚠️ 这个 label 是服务器上清理旧镜像的**唯一依据**（见 scripts/deploy.sh）。
+          #    去掉它，清理就只能按镜像名猜，会误删同机上其他项目的镜像
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: 构建并推送前端镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: ./doc-qa-web
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-web:${{ github.sha }}
+            ghcr.io/${{ github.repository }}-web:latest
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
