@@ -290,6 +290,6 @@ public String webSearch(@ToolParam(...) String query) {
 
 5. **`updateMarkdownFile` 的 `@ApiOperationLog` 描述写错了**——挂的是「删除 Markdown 问答文件」，应为「修改」。复制粘贴笔误，不影响功能，但会误导看日志的人。
 
-6. **`uploaded_chunks` 是只写不读的死列**。`src/main` 全程没有读取它的地方，且可被并发上传或他人抬高。它本意是给断点续传用的，而实际续传走的是分片表查询（`checkFile` 里那一段）。
+6. **`uploaded_chunks` 实际是只写不读的**。库层注释说它是「刻意冗余，用一次原子自增换掉高频 `count(*)`」，但 `src/main` 里没有任何地方读它——续传走的是分片表查询（`checkFile` 里那一段），`mergeChunk` 用的也是分片表的实际条数。它本意服务于断点续传，实际没承担这个职责，且可被并发上传或他人抬高。
 
 7. **`mergeChunk` 的 `updateById` 未刷新 `update_time`**。
