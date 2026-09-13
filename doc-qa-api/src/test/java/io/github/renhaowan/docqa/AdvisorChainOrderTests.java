@@ -88,7 +88,7 @@ class AdvisorChainOrderTests {
                 new NetworkSearchAdvisor(mock(SearXNGService.class),
                         mock(SearchResultContentFetcherService.class)),
                 new KnowledgeBaseAdvisor(mock(VectorStore.class), false),
-                new CustomChatMemoryAdvisor(mock(ChatMessageMapper.class), reqVO, 50),
+                new CustomChatMemoryAdvisor(mock(ChatMessageMapper.class), reqVO, 50, 8000),
                 new CustomStreamLoggerAndMessage2DBAdvisor(mock(ChatMessageMapper.class),
                         mock(ChatMapper.class), reqVO, mock(TransactionTemplate.class), 1L));
     }

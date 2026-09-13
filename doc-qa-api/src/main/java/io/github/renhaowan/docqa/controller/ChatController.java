@@ -57,6 +57,8 @@ public class ChatController {
     private String baseUrl;
     @Value("${spring.ai.openai.api-key}")
     private String apiKey;
+    @Value("${chat.memory.max-tokens}")
+    private Integer memoryMaxTokens;
 
     @Resource
     private ChatMessageMapper chatMessageMapper;
@@ -124,8 +126,8 @@ public class ChatController {
         if (networkSearch) {
             advisors.add(new NetworkSearchAdvisor(searXNGService, searchResultContentFetcherService));
         } else {
-            // 添加自定义对话记忆 Advisor（以最新的 50 条消息作为记忆）
-            advisors.add(new CustomChatMemoryAdvisor(chatMessageMapper, aiChatReqVO, 50));
+            // 添加自定义对话记忆 Advisor（以最新的 50 条消息作为记忆，并按 token 预算裁剪）
+            advisors.add(new CustomChatMemoryAdvisor(chatMessageMapper, aiChatReqVO, 50, memoryMaxTokens));
         }
 
         // 添加自定义打印流式对话日志 Advisor
