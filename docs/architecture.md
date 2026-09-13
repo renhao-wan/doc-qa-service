@@ -1,8 +1,6 @@
 # 架构总览
 
-> ⏳ 标记表示该文档尚未产出——本文档目录正在重构中，完成后此标记会全部移除。
-
-先读本文建立整体认识，再按需进入 `modules/` 下对应的链路文档。
+先读本文建立整体认识，再按需进入 [modules/](modules/) 下对应的链路文档。
 
 ---
 
@@ -38,20 +36,20 @@ doc-qa-service/
 └── docker-compose.yml       四个服务的编排入口
 ```
 
-两个子目录各自构建、各自有 Dockerfile。根目录的 `docker-compose.yml` 把它们与 `postgres`、`searxng` 一起编排起来，一条命令起全套（见 `deployment.md` ⏳）。
+两个子目录各自构建、各自有 Dockerfile。根目录的 `docker-compose.yml` 把它们与 `postgres`、`searxng` 一起编排起来，一条命令起全套（见 [deployment.md](deployment.md)）。
 
 ---
 
 ## 3. 模块划分
 
-四条链路，与 `modules/` 下的四份文档一一对应：
+四条链路，与 [modules/](modules/) 下的四份文档一一对应：
 
 | 模块 | 文档 | 职责 |
 |---|---|---|
-| 对话链路 | `modules/chat.md` ⏳ | 请求级 ChatClient、Advisor 链、对话记忆、联网搜索、SSE 流式输出、消息落库 |
-| 知识库链路 | `modules/knowledge-base.md` ⏳ | 文件分片上传与状态机、异步向量化、RAG 检索、Function Calling 联网兜底 |
-| 鉴权 | `modules/auth.md` ⏳ | 无状态 JWT、用户维度数据隔离、两条防越权路径 |
-| 数据层 | `modules/data.md` ⏳ | 表与索引设计、时间列类型约定、Flyway 迁移 |
+| 对话链路 | [modules/chat.md](modules/chat.md) | 请求级 ChatClient、Advisor 链、对话记忆、联网搜索、SSE 流式输出、消息落库 |
+| 知识库链路 | [modules/knowledge-base.md](modules/knowledge-base.md) | 文件分片上传与状态机、异步向量化、RAG 检索、Function Calling 联网兜底 |
+| 鉴权 | [modules/auth.md](modules/auth.md) | 无状态 JWT、用户维度数据隔离、两条防越权路径 |
+| 数据层 | [modules/data.md](modules/data.md) | 表与索引设计、时间列类型约定、Flyway 迁移 |
 
 ---
 
@@ -126,7 +124,7 @@ mergeChunk     按序流式合并为 {timestamp}_{原文件名}
                  └─ 状态改 COMPLETED，失败则 FAILED
 ```
 
-状态机：`UPLOADING → PENDING → VECTORIZING → COMPLETED / FAILED`。详见 `modules/knowledge-base.md`。
+状态机：`UPLOADING → PENDING → VECTORIZING → COMPLETED / FAILED`。详见 [modules/knowledge-base.md](modules/knowledge-base.md)。
 
 ---
 
@@ -160,4 +158,4 @@ mergeChunk     按序流式合并为 {timestamp}_{原文件名}
 | markdown-it + highlight.js | 14.1.0 / 11.11.1 | 流式 Markdown 渲染 |
 | spark-md5 | 3.0.2 | 分片上传前计算文件 MD5 |
 
-每一项技术**为什么选它**，见 `decisions.md` ⏳。
+每一项技术**为什么选它**，见 [decisions.md](decisions.md)。
