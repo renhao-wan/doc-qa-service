@@ -87,7 +87,7 @@ knowledge-base: # 企业知识库
   model: deepseek-v3 # 模型名称
   temperature: 0.0 # 温度值
   # 向量检索返回的文档条数。之所以可配而不是写死，是因为「取多少合适」应当由实测决定，
-  # 而不是拍一个数字——对照数据与最终取值依据见 docs/rag-evaluation.md
+  # 而不是拍一个数字——对照数据与最终取值依据见 docs/rag-evaluation/report.md
   top-k: 3
 
 chat: # 对话

@@ -2,8 +2,8 @@
 
 本文回答三个问题：**现在这套 RAG 检索得准不准**、**`topK` 该取多少**、**换一种切分方式会不会更好**。
 
-所有数字都是实跑出来的，不是估算。原始结果在 [`rag-evaluation/results/`](rag-evaluation/results/)，
-语料与问题集在 [`rag-evaluation/`](rag-evaluation/)，复跑命令见文末。
+所有数字都是实跑出来的，不是估算。原始结果在 [`results/`](results/)，
+语料与问题集在同目录下，复跑命令见文末。
 
 ---
 
@@ -40,7 +40,7 @@
 
 ### 2.2 问题集
 
-25 题，四类，都在 [`rag-evaluation/questions.tsv`](rag-evaluation/questions.tsv)：
+25 题，四类，都在 [`questions.tsv`](questions.tsv)：
 
 | 类别 | 题数 | 考什么 |
 |---|---|---|
@@ -60,7 +60,7 @@
 
 ### 2.4 金标准必须先自检
 
-问题集写完之后，第一件事不是跑检索，是跑 [`QuestionSetSelfCheckTests`](../doc-qa-api/src/test/java/io/github/renhaowan/docqa/rageval/QuestionSetSelfCheckTests.java)：
+问题集写完之后，第一件事不是跑检索，是跑 [`QuestionSetSelfCheckTests`](../../doc-qa-api/src/test/java/io/github/renhaowan/docqa/rageval/QuestionSetSelfCheckTests.java)：
 **每条 key phrase 必须完整落在某一个块内**。
 
 理由：命中判断按块做，若某条 key phrase 正好被切点劈成两半，那么无论检索多好都匹配不上——
@@ -74,7 +74,7 @@
 ## 三、切分策略对比（检索层）
 
 五种策略各自清空向量库、整份导入、用同一批问题检索。
-检索调用与线上 [`KnowledgeBaseAdvisor`](../doc-qa-api/src/main/java/io/github/renhaowan/docqa/advisor/KnowledgeBaseAdvisor.java)
+检索调用与线上 [`KnowledgeBaseAdvisor`](../../doc-qa-api/src/main/java/io/github/renhaowan/docqa/advisor/KnowledgeBaseAdvisor.java)
 逐字相同（同样不带 metadata filter），所以测的不是「理想检索器」，而是线上真实链路。
 
 ### 3.1 切分粒度
@@ -163,7 +163,7 @@ Spring AI 的 `MarkdownDocumentReader` 把标题只写进 metadata、**不写进
 
 **`knowledge-base.top-k` 保持 3。**
 
-`topK` 已经从写死的 `.topK(3)` 提成了配置项（[`application-dev.yml`](../doc-qa-api/src/main/resources/application-dev.yml)），
+`topK` 已经从写死的 `.topK(3)` 提成了配置项（[`application-dev.yml`](../../doc-qa-api/src/main/resources/application-dev.yml)），
 `KnowledgeBaseAdvisor` 保留了一个三参构造器可以显式指定。这样一旦线上出现
 「答案明明在库里却答不出」的反馈，可以不改代码先调配置验证——**优先试着调到 5~10，
 而不是去改切分**，因为切分改动实测只会更差。
@@ -229,7 +229,7 @@ Spring AI 的 `MarkdownDocumentReader` 把标题只写进 metadata、**不写进
   写成「严禁安排高档套房」。已用 `normalize` 归一最常见的几个近义词，但不是穷举（C4 靠它救回）。
 
 **原始回答全部保留在
-[`results/end-to-end-results.md`](rag-evaluation/results/end-to-end-results.md)**，上面每一句都可逐条复核。
+[`results/end-to-end-results.md`](results/end-to-end-results.md)**，上面每一句都可逐条复核。
 
 ### 5.3 topK 的端到端表现
 
@@ -322,14 +322,14 @@ irrelevant 类的整体表现：RAG 组 2/3 正确拒答（E1、E2），裸模�
 cd doc-qa-api
 
 # 金标准自检 + 切分探查（不联网，默认就会跑）
-JAVA_HOME="D:/IDEAjava/JDK/jdk17" mvn test -Dtest='QuestionSetSelfCheckTests,ChunkingProbeTests'
+JAVA_HOME="<你的JDK17路径>" mvn test -Dtest='QuestionSetSelfCheckTests,ChunkingProbeTests'
 
 # 检索层评估（约 40 秒）
-RAG_EVAL=true JAVA_HOME="D:/IDEAjava/JDK/jdk17" \
+RAG_EVAL=true JAVA_HOME="<你的JDK17路径>" \
   DASHSCOPE_API_KEY=xxx mvn test -Dtest=RagRetrievalEvaluationTests
 
 # 端到端评估（约 6 分钟）
-RAG_EVAL=true JAVA_HOME="D:/IDEAjava/JDK/jdk17" \
+RAG_EVAL=true JAVA_HOME="<你的JDK17路径>" \
   DASHSCOPE_API_KEY=xxx mvn test -Dtest=EndToEndEvaluationTests
 ```
 

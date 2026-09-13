@@ -37,7 +37,7 @@ public class KnowledgeBaseAdvisor implements StreamAdvisor {
      * 向量检索返回的文档条数。
      * <p>
      * 做成可配而不是写死，是为了让「topK 取多少合适」能被实测，而不是拍一个数字。
-     * 取值依据与对照数据见 docs/rag-evaluation.md。
+     * 取值依据与对照数据见 docs/rag-evaluation/report.md。
      */
     private final int topK;
 

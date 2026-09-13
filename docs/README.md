@@ -49,7 +49,7 @@ doc-qa-service 是一套**企业内部知识库问答服务**，用 Spring AI �
 | `decisions.md` | 选型理由 + 被否决的方案及代价 | ⏳ |
 | `pitfalls.md` | 跨模块与环境级坑点 | ⏳ |
 | `deployment.md` | 编排、密钥管理、CI/CD、部署脚本的防呆设计 | ⏳ |
-| `rag-evaluation/` | RAG 检索质量评估：报告、金标准问题集、语料、原始结果 | [rag-evaluation.md](rag-evaluation.md) 已存在，目录索引 ⏳ |
+| [rag-evaluation/](rag-evaluation/README.md) | RAG 检索质量评估：报告、金标准问题集、语料、原始结果 | ✅ |
 
 ---
 

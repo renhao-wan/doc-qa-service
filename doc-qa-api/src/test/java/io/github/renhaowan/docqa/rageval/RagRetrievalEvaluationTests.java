@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * RAG_EVAL=true JAVA_HOME="D:/IDEAjava/JDK/jdk17" \
  *   DASHSCOPE_API_KEY=xxx mvn test -Dtest=RagRetrievalEvaluationTests
  * }</pre>
- * 结果写入 {@code docs/rag-evaluation/results/}，结论见 {@code docs/rag-evaluation.md}。
+ * 结果写入 {@code docs/rag-evaluation/results/}，结论见 {@code docs/rag-evaluation/report.md}。
  **/
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "RAG_EVAL", matches = "true",
