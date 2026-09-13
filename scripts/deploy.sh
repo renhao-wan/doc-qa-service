@@ -31,8 +31,17 @@ done
 IMAGE_TAG=$(grep '^IMAGE_TAG=' .env | cut -d= -f2-)
 echo "==> 目标镜像 tag：${IMAGE_TAG}"
 
-# ── 拉取镜像 ──
-docker compose pull
+# ── 校验镜像已就位 ──
+# ⚠️ 这里**不做 `docker compose pull`**。服务器直连 ghcr.io 实测只有 ~150 KB/s，
+#    400MB 的 app 镜像要 45 分钟以上且中途会 connection reset —— 镜像改由
+#    deploy.yml 在 GitHub runner 上拉好、docker save 后直传进来（实测 5~6 MB/s）。
+#    所以此刻本地必须有镜像；没有就明确报错，而不是让 compose 去 registry 上干等
+for img in \
+  "ghcr.io/renhao-wan/doc-qa-service-api:${IMAGE_TAG}" \
+  "ghcr.io/renhao-wan/doc-qa-service-web:${IMAGE_TAG}"; do
+  docker image inspect "$img" >/dev/null 2>&1 \
+    || { echo "❌ 本地缺镜像 ${img}（应由 deploy.yml 传入，或人工 docker load）"; exit 1; }
+done
 
 # ── 重建变化的容器 ──
 # ⚠️ 绝不加 -v：那会连数据卷一起删

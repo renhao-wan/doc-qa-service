@@ -64,6 +64,33 @@ jobs:
           SEARXNG_SECRET=${{ secrets.SEARXNG_SECRET }}
           EOF
 
+      - name: 拉取镜像并直传到服务器
+        # ⚠️ 这一步存在的理由：服务器直连 ghcr.io 实测只有 ~150 KB/s —— 400MB 的 app
+        #    镜像要 45 分钟以上，且中途稳定 connection reset。而 runner 到服务器实测
+        #    有 5~6 MB/s（三次取样 5.12/6.07/5.68），runner ↔ ghcr 又是机房间速度。
+        #    让镜像换一趟车，服务器从此完全不碰 registry。
+        # ⚠️ 不要加 gzip 那一层：镜像层本身就是压缩过的 tar，二次压缩几乎压不动，
+        #    白白吃一遍 CPU。实测这个链路 500MB 大约 1~2 分钟，没必要优化
+        # ⚠️ tag 走 env 而不是内联进脚本：它是 workflow_dispatch 的**用户输入**，
+        #    内联等于把未转义的字符串拼进 shell 源码
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          set -euo pipefail
+          # GHCR 的镜像路径必须全小写，而 owner 的 login 不保证是小写
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          api="ghcr.io/${owner}/doc-qa-service-api:${TAG}"
+          web="ghcr.io/${owner}/doc-qa-service-web:${TAG}"
+
+          docker pull "$api"
+          docker pull "$web"
+
+          # docker save 出的是不含 registry 凭据的普通 tar，走 ssh 的加密通道传输
+          docker save "$api" "$web" \
+            | ssh -i ~/.ssh/deploy_key \
+                "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+                "docker load"
+
       - name: 执行部署
         run: |
           ssh -i ~/.ssh/deploy_key \

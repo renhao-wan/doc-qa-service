@@ -78,7 +78,9 @@ services:
 
   app:
     # 本地：IMAGE_TAG 未设置 → :local，由 docker compose up -d --build 构建
-    # 服务器：.env 里 IMAGE_TAG=<git-sha>，由 docker compose pull 拉取。
+    # 服务器：.env 里 IMAGE_TAG=<git-sha>，镜像由 deploy.yml 从 GitHub runner
+    #         `docker save | ssh` 直传、`docker load` 灌进来，**全程不经 registry**
+    #         （服务器直连 ghcr.io 只有 ~150 KB/s，原因见 deploy.yml 同名步骤）
     # ⚠️ 用不可变的 sha 而非 latest：latest 漂移时容器可能带着旧镜像启动，
     #    而 docker ps 上看不出任何异常
     image: ghcr.io/renhao-wan/doc-qa-service-api:${IMAGE_TAG:-local}
