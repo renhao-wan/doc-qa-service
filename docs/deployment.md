@@ -171,8 +171,14 @@ depends_on:
 
 ```
 checkout → 解析镜像 tag → 配置 SSH → scp 编排文件与部署脚本
-  → 通过 stdin 写 .env → ssh 执行 deploy.sh
+  → 通过 stdin 写 .env → 拉取镜像并直传到服务器 → ssh 执行 deploy.sh
 ```
+
+**镜像怎么到的服务器**：runner 先从 GHCR 拉好两个镜像，再 `docker save | ssh "docker load"` 直传。
+
+⚠️ **不让服务器自己 `docker compose pull` 是实测决定的**：服务器直连 `ghcr.io` 只有约 **150 KB/s**——400MB 的 app 镜像要 45 分钟以上，而且中途会稳定 `connection reset`。而 runner 到服务器实测有 **5~6 MB/s**，runner ↔ GHCR 又是机房间速度。让镜像换一趟车，服务器从此完全不碰 registry。
+
+⚠️ **不要给这一步加 gzip**：镜像层本身就是压缩过的 tar，二次压缩几乎压不动，白白吃一遍 CPU。实测 500MB 大约 1~2 分钟，没必要优化。
 
 **镜像 tag 用 git sha，不用 `latest`**：
 
@@ -202,7 +208,19 @@ tags: |
 for k in IMAGE_TAG DASHSCOPE_API_KEY JWT_SECRET SEARXNG_SECRET; do
   grep -q "^${k}=..*" .env || { echo "❌ .env 里 ${k} 未设置或为空"; exit 1; }
 done
+
+# 取出目标 tag（用 grep 提取，不要 source .env，原因见本节末尾）
+IMAGE_TAG=$(grep '^IMAGE_TAG=' .env | cut -d= -f2-)
+
+# 镜像必须已在本地（由 CD 直传进来，见 §5.2）
+for img in "ghcr.io/<owner>/<repo>-api:${IMAGE_TAG}" \
+           "ghcr.io/<owner>/<repo>-web:${IMAGE_TAG}"; do
+  docker image inspect "$img" >/dev/null 2>&1 \
+    || { echo "❌ 本地缺镜像 ${img}（应由 CD 传入，或人工 docker load）"; exit 1; }
+done
 ```
+
+⚠️ 最后那段 `docker image inspect` 校验是**替代 `docker compose pull`** 的：既然镜像不再由服务器拉取（见 §5.2），此刻本地就必须有；没有就明确报错，而不是让 compose 去 registry 上干等。
 
 密钥的非空校验放在脚本里而不是配置文件里，原因见 §3.3。
 
@@ -243,11 +261,7 @@ done
 
 不做这一步的话，「容器起来了但其实是坏的」会显示成部署成功。脚本退出码非 0 会让 CD job 标红。
 
-⚠️ 脚本里**不要写 `source .env`**：那会把 `.env` 当脚本执行，密钥里若含 `$` 或空格会被二次展开、可能静默改值。compose 自己会读 `.env` 做变量替换，脚本只取 `IMAGE_TAG` 用于日志：
-
-```bash
-IMAGE_TAG=$(grep '^IMAGE_TAG=' .env | cut -d= -f2-)
-```
+⚠️ 脚本里**不要写 `source .env`**：那会把 `.env` 当脚本执行，密钥里若含 `$` 或空格会被二次展开、可能静默改值。compose 自己会读 `.env` 做变量替换；脚本只需要取出 `IMAGE_TAG` 用于日志与镜像校验——用 `grep | cut` 提取即可。
 
 ### 5.4 写 `.env` 的两个细节
 
