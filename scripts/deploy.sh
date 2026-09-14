@@ -86,12 +86,44 @@ done
 #    默认配置（search.formats 不含 json），此时容器照常 up、端口照常通、日志也没有异常，
 #    只有真的请求一次 format=json 才会暴露 403。2026-09-14 线上就是这样静默坏掉的：
 #    部署全程显示成功，而联网搜索一直返回 403
+#
+# ⚠️ 必须重试，理由与上面的 web 健康检查相同：本脚本几步之前刚 `restart searxng`，
+#    而 SearXNG 从进程启动到监听端口有一段空窗。只请求一次就会撞上它 ——
+#    2026-09-14 线上正是如此：部署被判失败，而日志显示成「searxng 配置没就位」，
+#    实际只是问得太早（校验时刻与容器 Started 相差 0.27 秒，容器随后自己打出 Listening at）。
 echo "==> 校验 searxng 的 json 输出"
-searxng_code=$(curl -s -o /dev/null -w '%{http_code}' -m 20 \
-  "http://127.0.0.1:8889/search?q=ping&format=json" || echo 000)
+searxng_code=""
+for i in $(seq 1 30); do
+  # ⚠️ 失败的兜底必须写在命令替换**外面**。写成 `$(curl ... || echo 000)` 的话，
+  #    curl 经 -w 输出的那个 000 与 echo 的 000 会一起被捕获，得到 "000000" ——
+  #    旧版正是如此，排障时反而看不出发生了什么。
+  #    写在外面还有个必要：本脚本开了 `set -e`，命令替换返回非零会让脚本就此退出。
+  searxng_code=$(curl -s -o /dev/null -w '%{http_code}' -m 20 \
+    "http://127.0.0.1:8889/search?q=ping&format=json" 2>/dev/null) || searxng_code="000"
+
+  # 两种失败要分开对待，处置完全不同：
+  #   000 → 连不上，通常只是还没起来，继续等
+  #   非 000 → 端口通了、SearXNG 已明确表态，那是配置问题，再等也不会变
+  # ⚠️ 这里用 if 而不是 `[[ ... ]] && break`：后者的条件为假时整条语句返回非零，
+  #    在 `set -e` 下会直接终止脚本。
+  if [[ "$searxng_code" == "200" ]]; then
+    echo "==> ✅ searxng format=json 正常"
+    break
+  fi
+  if [[ "$searxng_code" != "000" ]]; then
+    break
+  fi
+  sleep 2
+done
+
 if [[ "$searxng_code" != "200" ]]; then
   echo "❌ searxng format=json 返回 ${searxng_code}（期望 200）"
-  echo "   多半是 searxng/settings.yml 没就位 —— 检查 search.formats 是否含 json"
+  if [[ "$searxng_code" == "000" ]]; then
+    echo "   等待 60 秒仍连不上 127.0.0.1:8889 —— 容器没起来，或没在监听该端口"
+  else
+    echo "   端口通了但拒绝 format=json —— 多半是 searxng/settings.yml 没就位"
+    echo "   检查 search.formats 是否含 json"
+  fi
   docker compose logs --tail=30 searxng
   exit 1
 fi
