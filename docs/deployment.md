@@ -342,6 +342,7 @@ EOF
 | 修改 NS 指向 CF | 域名注册商 |
 | `certs/` 与 `searxng/` 就位 | 见 §8 |
 | GitHub Secrets 的 `SERVER_HOST` | 仓库 Settings |
+| **换服务器**另需：在新库上重建演示账号（数据卷是新的，账号不跟着代码走） | 见 §8.2 |
 
 ⚠️ **改了 NS 别急着下结论**：注册局**数据库**的更新与**权威服务器实际应答**是两件事，中间有一段不一致的窗口。查委派是否真的生效，要问注册局权威，而不是公共 DNS：
 
@@ -381,6 +382,7 @@ curl -H "Host: <你的域名>" http://<源站IP>/
 | 4 | 建目录 `/opt/doc-qa-service/certs`（`searxng/` 由 CD 首次部署时自动创建并同步） |
 | 5 | 配 GitHub Secrets（见下） |
 | 6 | 把 GHCR 的两个 package 设为 public |
+| 7 | 首次部署成功**之后**，在库里创建演示账号——否则站点能打开、登录页能渲染，但**谁也登不进去**（见 §8.2） |
 
 ### 8.1 为什么只有 `certs/` 要手动准备
 
@@ -406,6 +408,38 @@ curl -H "Host: <你的域名>" http://<源站IP>/
 ⚠️ 服务器地址写进公开仓库等于公开源站 IP（绕过 CDN 的攻击面）。
 
 ⚠️ `JWT_SECRET` 生产环境**建议不少于 64 字节**（jjwt 会按键长自动选算法，≥64 走 HS512）。
+
+### 8.2 生产库里的账号从哪来
+
+**部署成功 ≠ 能登录。** 新库的 `t_user` 是**空的**——站点能打开、登录页能渲染，但没有一个账号能登进去。
+
+这是 `SPRING_PROFILES_ACTIVE=prod` 的**预期结果**，不是故障：prod 的 `flyway.locations` 不含 `db/dev-migration`，演示账号**刻意不会**随迁移进来（原因见 §3.2）。而这个项目**没有注册接口**——定位是企业内部系统，账号由管理员分配更贴合真实场景（见 [decisions.md](decisions.md) 第二块 §10）。
+
+所以首次部署后，必须由管理员手工创建一次（两个 hash 就是 `db/dev-migration/V3` 里那两个，密码 `demo123`）：
+
+```bash
+docker exec -i doc-qa-postgres psql -U postgres -d robot <<'SQL'
+INSERT INTO t_user (username, password_hash, nickname)
+VALUES ('demo',  '$2b$10$hhFzXa78QJ7kFZAaVO2aK.J2HlOhQWJzrxp7/uI8dXW.4bCvtgK4a', '演示账号 A'),
+       ('demo2', '$2b$10$mgKXZgtlRKoUSyVPf499PeLUpNhugMOAvvXxb3JLEuW4WzlfR23c6', '演示账号 B')
+ON CONFLICT (username) DO NOTHING;
+SQL
+```
+
+⚠️ **定界符必须写成带引号的 `<<'SQL'`。** 不带引号时 shell 会展开 hash 里的 `$2b$10$hhFz…`，**而且全程不报错**。实测对照：
+
+```
+不带引号：hash: b0.J2HlOhQWJzrxp7/uI8dXW.4bCvtgK4a      ← 前半段被吃空
+带引号：  hash: $2b$10$hhFzXa78QJ7kFZAaVO2aK.J2HlOhQ…  ← 原样保留
+```
+
+结果是插进去一串**无效 hash**：账号建出来了，SQL 执行也一路成功，只有真正登录时才发现「密码怎么输都不对」。
+
+⚠️ **不要图省事把它挪进 `db/migration/`。** 那是随仓库公开的目录：写进去，等于**每一个 clone 这个仓库的人**——无论跑的是哪个 profile——他的库里都会多出这对凭证。到那时它不再是「演示账号」，而是一个**真实的后门账号**。账号是运维数据，由管理员手执创建一次即可，不该混进迁移脚本。
+
+⚠️ **这个账号是全权限的**：项目不做 RBAC（见 [decisions.md](decisions.md) 第二块 §10），登录后既能上传知识库文件，也能删除**他人**上传的文件。公开演示站要么接受这一点，要么定期重建演示数据。
+
+**换服务器时必须重做这一步**（见 §7.4）——数据卷是新的，账号不会跟着代码走。
 
 ---
 
