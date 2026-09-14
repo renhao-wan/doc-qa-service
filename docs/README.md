@@ -15,7 +15,7 @@ doc-qa-service 是一套**企业内部知识库问答服务**，用 Spring AI �
 | 顺序 | 文档 | 说明 |
 |---|---|---|
 | 1 | [getting-started.md](getting-started.md) | 前置依赖、起服务、验证 |
-| 2 | [deployment.md](deployment.md) | 部署到服务器、CI/CD、运维（本地跑通之后再看） |
+| 2 | [deployment.md](deployment.md) | 域名与 CDN、部署到服务器、CI/CD、运维（本地跑通之后再看） |
 
 ### 二、想搞懂它怎么设计的
 
@@ -46,7 +46,7 @@ doc-qa-service 是一套**企业内部知识库问答服务**，用 Spring AI �
 | [modules/data.md](modules/data.md) | 七张表、索引设计、时间列类型、Flyway 策略与版本号陷阱 |
 | [decisions.md](decisions.md) | 选型理由 + 被否决的方案及代价 |
 | [pitfalls.md](pitfalls.md) | 跨模块与环境级坑点 |
-| [deployment.md](deployment.md) | 编排、密钥管理、CI/CD、部署脚本的防呆设计 |
+| [deployment.md](deployment.md) | 域名与 CDN、编排、密钥管理、CI/CD、部署脚本的防呆设计 |
 | [rag-evaluation/](rag-evaluation/README.md) | RAG 检索质量评估：报告、金标准问题集、语料、原始结果 |
 
 `rag-evaluation/` 下另有 `questions.tsv`（金标准问题集）、`corpus/`（三份评估语料）、`results/`（原始结果）。
