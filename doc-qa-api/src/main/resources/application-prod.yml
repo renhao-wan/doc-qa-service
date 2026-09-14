@@ -87,6 +87,10 @@ knowledge-base:
 chat:
   memory:
     max-tokens: 8000
+  # 允许前端选择的模型白名单（逗号分隔）。语义与安全理由见 application-dev.yml 同名项。
+  # 与 dev 取值一致，但**刻意各写一份而不是并入 application.yml**：这是安全边界，
+  # 将来收紧生产（比如只留一个模型）时应当是一次显式改动，而不是被公共配置悄悄带过。
+  allowed-models: deepseek-v3,deepseek-r1
 
 auth:
   jwt:

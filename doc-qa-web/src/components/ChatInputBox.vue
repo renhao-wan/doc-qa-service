@@ -14,8 +14,9 @@
         <div class="flex mt-3">
             <!-- 左侧 -->
             <div class="flex gap-2 relative" ref="leftContainerRef">
-                <!-- 大模型下拉框 -->
-                <div v-show="props.showModelDropdown" class="border border-gray-300 px-2 py-1 rounded-3xl flex items-center justify-center hover:bg-gray-200 cursor-pointer"
+                <!-- 大模型下拉框。模型列表是从后端拉的，拉回来之前 currSelectedModel 还是 null，
+                     渲染出来会是个空图标 + 空名字的按钮，所以这里等它到位再显示 -->
+                <div v-if="props.showModelDropdown && currSelectedModel" class="border border-gray-300 px-2 py-1 rounded-3xl flex items-center justify-center hover:bg-gray-200 cursor-pointer"
                 ref="selectRef"
                 @click="toggleModelDropdown">
                     <SvgIcon :name="currSelectedModel.icon" customCss="w-5 h-5 mr-1.5" />
@@ -29,7 +30,7 @@
                 ref="dropdownRef"
                 :class="['absolute', 'left-0', 'w-48', 'bg-white', 'rounded-lg', 'shadow-lg', 'border', 'border-gray-200', 'z-10', 'overflow-hidden', dropdownPosition]"
                 >
-                    <div v-for="model in models" :key="model.id" 
+                    <div v-for="model in models" :key="model.name"
                     class="px-3 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
                     @click="selectModel(model)">
                         <div class="flex items-center">
@@ -181,6 +182,9 @@ const handleClickOutside = (event) => {
 // 挂载时添加事件监听器
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+
+  // 拉取可用模型列表。store 内部只拉一次，对话页与知识库页都挂着本组件也不会重复请求
+  chatStore.loadModels()
 })
 
 // 卸载时移除事件监听器
@@ -226,6 +230,13 @@ const handleSendMessage = () => {
   // 若消息为空
   if (!userMessage.value.trim()) {
     message.warning('消息不能为空');
+    return
+  }
+
+  // 模型列表还没拉回来（或拉取失败）时不能发：请求里会缺 modelName，后端直接拒。
+  // ⚠️ 只在需要选模型的页面拦——知识库页不传 modelName，模型由后端配置固定
+  if (props.showModelDropdown && !chatStore.selectedModel) {
+    message.warning('模型列表还没加载好，请稍后再试');
     return
   }
 

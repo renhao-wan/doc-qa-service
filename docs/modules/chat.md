@@ -1,6 +1,6 @@
 # 对话链路
 
-对应入口：`POST /api/chat/completion`（以及 `/chat/new`、`/chat/list`、`/chat/message/list`、`/chat/summary/rename`、`/chat/delete` 等会话管理接口）。
+对应入口：`POST /api/chat/completion`（以及 `/chat/models`、`/chat/new`、`/chat/list`、`/chat/message/list`、`/chat/summary/rename`、`/chat/delete` 等会话管理接口）。
 
 本文讲清楚一件事：**一条用户消息从进来到落库，中间经过了什么，以及每一处为什么这么设计。**
 
@@ -26,6 +26,42 @@ ChatClient.ChatClientRequestSpec spec = ChatClient.create(chatModel)
 新增 AI 能力时沿用这个模式：不要往字段上注入共享的 ChatClient。
 
 **代价**：每个请求新建一次 `OpenAiChatModel`，牺牲了一点对象复用的收益。相对它带来的灵活性，这个代价可以接受（真正的开销在网络调用上）。
+
+### 1.1 模型名在 options 里，不在 ChatModel 上
+
+⚠️ 这是最容易误解的一处：**`OpenAiChatModel` 对象里不装模型名**。
+
+它只持有 `baseUrl` 与 `apiKey`；模型名（以及 temperature）走**每次请求**的 `OpenAiChatOptions`：
+
+```java
+// .model(...) 挂在 options 上，不是挂在 OpenAiChatModel.builder() 上
+.options(OpenAiChatOptions.builder().model(modelName).temperature(temperature).build())
+```
+
+API 层面也印证这一点：`OpenAiApi` 的构造器内部是 `restClientBuilder.clone().baseUrl(baseUrl)…build()`——它决定「往哪个地址发」，「用哪个模型」则是请求体里的字段。
+
+**直接影响**：为不同请求构造出来的 `OpenAiChatModel` 之间**没有任何按模型区分的状态**。所以「换成另一个模型」不需要重建一个有状态的对象，也不会出现「后端把某个模型的对象缓存起来复用」这种事——模型名每一轮都随请求重新传。
+
+### 1.2 模型名白名单
+
+`modelName` 由前端传入，而服务端只有一把 `DASHSCOPE_API_KEY`。**不校验的话，任何登录用户都能指定一个未列出的模型来消耗同一个 key 的额度。**
+
+`chat.allowed-models`（逗号分隔的配置项）是权威清单，同时服务两处：
+
+| 用途 | 位置 |
+|---|---|
+| 下发给前端做下拉框 | `GET /chat/models` |
+| 校验 `POST /chat/completion` 的入参 | `ChatController.chat` |
+
+不在两处各维护一份的理由：这份清单同时管着「前端能选什么」和「后端收什么」，两边各写一份迟早会对不上——表现为前端列着一个后端已经拒掉的模型。
+
+几处细节：
+
+- **校验必须在返回 `Flux` 之前同步完成**，与归属校验同理——HTTP 头一旦发出，异常就变不成 `Response` JSON 了。
+- **后端只返回模型名**。图标与描述是前端资源（icon 是本地 svg symbol 名），由前端按名字补，见 `chatStore` 的 `MODEL_META`。后端新增模型而前端没补映射时，下拉框退化成默认图标 + 空描述，**但功能正常**。
+- **前端的模型列表不持久化**（`persist.pick` 刻意不含 `models`）。它是后端白名单的投影，缓存下来会让「后端下架了某模型，前端还列着它」跨刷新一直存在。持久化的只有「上次选中了哪个」——而它若已被移出白名单，启动时会回退到第一个，不会留着一个后端已经拒掉的选中项。
+
+**真正的风险是枚举，不是瞎猜**：名字猜错只会拿到 `model_not_found`，猜对就直接用掉了。实测 `qwen-max`——一个前端下拉框里根本没有的模型——一次就调通了。
 
 ---
 

@@ -31,6 +31,7 @@ public enum ResponseCodeEnum implements BaseExceptionInterface {
     STORAGE_DIR_UNAVAILABLE("20008", "服务器存储目录不可用，请联系管理员"),
     FILE_MERGE_FAILED("20009", "文件合并失败"),
     MARKDOWN_FILE_NO_PERMISSION("20010", "无权操作该文件"),
+    MODEL_NOT_ALLOWED("20011", "暂不支持该模型"),
 
 
     // ----------- 鉴权异常状态码 -----------

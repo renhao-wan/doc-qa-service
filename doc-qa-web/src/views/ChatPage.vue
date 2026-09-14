@@ -94,7 +94,11 @@ watch(() => route.params.chatId, (newChatId) => {
   }
 })
 
-onMounted(() => {
+onMounted(async () => {
+  // 先等模型列表就绪：下面的首页首条消息是**自动发送**的，而模型列表是从后端拉的。
+  // 没等它就发，请求里 modelName 是 undefined，会被后端直接拒掉。
+  await chatStore.loadModels()
+
   // 加载历史消息
   loadHistoryMessages()
 
@@ -105,8 +109,10 @@ onMounted(() => {
   }
 
   const firstMessage = history.state?.firstMessage
-  // 检查跳转路由时，是否有初始消息
-  if (firstMessage) {
+  // 检查跳转路由时，是否有初始消息。
+  // ⚠️ 另外要求模型已就绪：拿不到模型时只把消息填进输入框、不自动发送 ——
+  //    发出去也会因为缺 modelName 被拒，不如留给用户手动重发（输入框里内容还在）
+  if (firstMessage && chatStore.selectedModel) {
     message.value = firstMessage
     // 发送消息
     sendMessage({

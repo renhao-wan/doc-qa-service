@@ -30,6 +30,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -59,6 +60,9 @@ public class ChatController {
     private String apiKey;
     @Value("${chat.memory.max-tokens}")
     private Integer memoryMaxTokens;
+    // 允许前端调用的模型白名单。@Value 会自动按逗号切分成 List
+    @Value("${chat.allowed-models}")
+    private List<String> allowedModels;
 
     @Resource
     private ChatMessageMapper chatMessageMapper;
@@ -78,6 +82,21 @@ public class ChatController {
     }
 
     /**
+     * 查询可用的模型列表（对话页下拉框的数据源）
+     *
+     * <p>之所以由后端下发而不是前端写死：这份白名单同时管着「前端能选什么」与「后端收什么」。
+     * 两处各维护一份的话，迟早会对不上——表现为前端列着一个后端已经拒掉的模型。
+     *
+     * <p>只返回模型名。图标与描述是**前端资源**（icon 是 svg symbol 名），
+     * 由前端按名字补，见 chatStore 的 MODEL_META。
+     */
+    @GetMapping("/models")
+    @ApiOperationLog(description = "查询可用的模型列表")
+    public Response<List<String>> listModels() {
+        return Response.success(allowedModels);
+    }
+
+    /**
      * 流式对话
      * @return
      */
@@ -93,11 +112,21 @@ public class ChatController {
         // 是否开启联网搜索
         boolean networkSearch = aiChatReqVO.getNetworkSearch();
 
+        Long currentUserId = AuthContext.getCurrentUserId();
+
+        // 模型名白名单校验。⚠️ 和下面的归属校验同理，必须在返回 Flux 之前同步完成。
+        //    服务端只有一把 DASHSCOPE_API_KEY，而模型名由前端每请求传入——
+        //    不校验的话，任何登录用户都能指定白名单外的模型（实测 qwen-max 一次调通），
+        //    烧的是同一份额度。名字猜错只是调不通，猜对就直接用掉了，真正的风险是枚举。
+        if (!allowedModels.contains(modelName)) {
+            log.warn("## 拒绝调用未授权模型: userId={}, modelName={}", currentUserId, modelName);
+            throw new BizException(ResponseCodeEnum.MODEL_NOT_ALLOWED);
+        }
+
         // ⚠️ 归属校验必须在返回 Flux 之前同步完成：
         //    一旦开始返回流式响应，异常就无法再变成 Response JSON 了（HTTP 头已发出）。
         //    这是本项目最严重的一处越权——原实现只按 chatUuid 落库，
         //    不校验的话 A 能往 B 的对话里写消息，直接污染别人的多轮上下文。
-        Long currentUserId = AuthContext.getCurrentUserId();
         if (!chatMapper.existsByUuidAndUserId(aiChatReqVO.getChatId(), currentUserId)) {
             throw new BizException(ResponseCodeEnum.CHAT_NOT_EXISTED);
         }
