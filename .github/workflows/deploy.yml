@@ -35,12 +35,23 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 同步编排文件与部署脚本
-        # 一起同步：部署脚本与 compose 文件必须和被部署的代码同一个版本
+      - name: 同步编排文件、部署脚本与 searxng 配置
+        # 一起同步：部署脚本与 compose 文件必须和被部署的代码同一个版本。
+        # ⚠️ searxng/settings.yml 也必须在这里。它是 bind mount 的源文件、不在镜像里，
+        #    漏传的后果不是报错而是**静默降级**：容器会自己生成一份默认配置
+        #    （search.formats 不含 json），format=json 返回 403、联网搜索整条链路失效，
+        #    而部署脚本依然报「✅ 部署完成」。它不含密钥（secret_key 走 SEARXNG_SECRET
+        #    环境变量），因此可以安全地随仓库同步
         run: |
+          ssh -i ~/.ssh/deploy_key \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "mkdir -p /opt/doc-qa-service/searxng"
           scp -i ~/.ssh/deploy_key \
             docker-compose.yml scripts/deploy.sh \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/doc-qa-service/"
+          scp -i ~/.ssh/deploy_key \
+            searxng/settings.yml \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/doc-qa-service/searxng/"
 
       - name: 写入 .env
         # ⚠️ 走 stdin 而不是 ssh 的命令行参数：命令行参数会出现在服务器的进程列表里

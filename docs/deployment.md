@@ -310,9 +310,26 @@ EOF
 | 1 | 云服务器安全组放行 80、443 入方向 |
 | 2 | Cloudflare 后台生成 Origin Certificate，放到 `/opt/doc-qa-service/certs/` |
 | 3 | 生成 SSH 密钥对，公钥写入服务器 `~/.ssh/authorized_keys` |
-| 4 | 建目录 `/opt/doc-qa-service/{certs}` |
+| 4 | 建目录 `/opt/doc-qa-service/certs`（`searxng/` 由 CD 首次部署时自动创建并同步） |
 | 5 | 配 GitHub Secrets（见下） |
 | 6 | 把 GHCR 的两个 package 设为 public |
+
+### 7.1 为什么只有 `certs/` 要手动准备
+
+`docker-compose.yml` 里有两个 bind mount 的源目录，但归宿不同：
+
+| 挂载 | 谁来准备 | 依据 |
+|---|---|---|
+| `./certs` → `/etc/nginx/certs` | **手动** | 含私钥，绝不能进仓库 |
+| `./searxng` → `/etc/searxng` | **CD 自动 scp** | 不含密钥（`secret_key` 由 `SEARXNG_SECRET` 环境变量提供），可随仓库同步 |
+
+⚠️ 漏掉 `certs/` 会**当场暴露**：nginx 启动失败（`cannot load certificate`），
+`deploy.sh` 的前置校验直接 `exit 1`。
+
+⚠️ `searxng/settings.yml` 在 2026-09-14 之前不在 `scp` 清单里，后果是**静默降级**：
+容器自己生成一份默认配置（`search.formats` 不含 `json`），`format=json` 返回 **403**，
+联网搜索整条链路失效，而部署脚本仍然报「✅ 部署完成」。现已由 CD 同步，
+并由 `deploy.sh` 末尾的 json 校验兜底——**再漏就变成部署失败，而不是静默坏掉**。
 
 **GitHub Secrets**：`SERVER_HOST`、`SERVER_USER`、`SSH_PRIVATE_KEY`、`DASHSCOPE_API_KEY`、`JWT_SECRET`、`SEARXNG_SECRET`。
 
@@ -332,3 +349,12 @@ EOF
 4. **端口收敛**：服务器上 `ss -lntp` 看不到 5432 / 8080 / 8889 监听在 `0.0.0.0`。
 5. **内存实测**：`docker stats --no-stream` 记录四个容器的实际占用。
 6. **端到端真实可用**：能登录、能提问、能上传知识库文件——**不只是端口通、接口返 200**。
+7. **联网搜索真的搜得到东西**：在服务器上执行
+
+   ```bash
+   curl "http://127.0.0.1:8889/search?q=spring+boot&format=json&engines=360search,naver,presearch,mwmbl"
+   ```
+
+   看 `results` 是否**非空**（2026-09-14 实测 53 条）。⚠️ 只看 HTTP 状态码不够：
+   `search.formats` 没开 `json` 时返回 **403**，引擎全部超时时返回 **200 但 `results` 为空**——
+   两种都不是「能用」，而后者尤其容易被误判成「搜索就是这个样子」。

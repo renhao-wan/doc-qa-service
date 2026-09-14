@@ -48,6 +48,13 @@ done
 # --remove-orphans：compose 文件里已删除的服务，其容器一并回收，不留僵尸
 docker compose up -d --remove-orphans
 
+# ── 重启 searxng ──
+# ⚠️ searxng/settings.yml 是 bind mount 的源文件，改它不会让 compose 认为容器需要重建，
+#    up -d 对它完全无效；而 SearXNG 只在启动时读一次配置，不热加载。
+#    不重启的话，「改了 formats/engines → 部署成功 → 配置其实没生效」会静默发生。
+#    这里无条件重启：它无状态、重启约 1~2 秒，比引入文件时间戳比对更简单，也不会漏判
+docker compose restart searxng
+
 # ── 清理本项目旧镜像 ──
 # ⚠️ 不能直接 `docker image prune -a`：这台机器上还有 orientation 项目，那样会把它的
 #    镜像一起删掉。按构建时打的 OCI label 精确过滤，且只清 72 小时内没被用过的 ——
@@ -73,6 +80,21 @@ for i in $(seq 1 30); do
   fi
   sleep 5
 done
+
+# ── 校验 searxng 真的能出 json ──
+# ⚠️ 这一条防的是「容器起来了但配置没生效」：settings.yml 缺失时 SearXNG 会自生成一份
+#    默认配置（search.formats 不含 json），此时容器照常 up、端口照常通、日志也没有异常，
+#    只有真的请求一次 format=json 才会暴露 403。2026-09-14 线上就是这样静默坏掉的：
+#    部署全程显示成功，而联网搜索一直返回 403
+echo "==> 校验 searxng 的 json 输出"
+searxng_code=$(curl -s -o /dev/null -w '%{http_code}' -m 20 \
+  "http://127.0.0.1:8889/search?q=ping&format=json" || echo 000)
+if [[ "$searxng_code" != "200" ]]; then
+  echo "❌ searxng format=json 返回 ${searxng_code}（期望 200）"
+  echo "   多半是 searxng/settings.yml 没就位 —— 检查 search.formats 是否含 json"
+  docker compose logs --tail=30 searxng
+  exit 1
+fi
 
 echo "==> 当前容器状态："
 docker compose ps
